@@ -1,0 +1,472 @@
+<!doctype html>
+<!--
+  PROTOTYPE, throwaway. Three variants of the Kitchen Display, switchable via ?variant=:
+    A  Deck:   one thing per screen (week, today's ingredients, one step per screen)
+    B  Split:  week strip + whole ingredient list + current step, always on one screen
+    C  Cursor: the whole recipe as one document; the buttons move a cursor step by step
+    D  Split, full method: B's week strip + ingredients, but the right shows every step with a cursor
+  Page-turn buttons: PageDown/PageUp, arrows, space. The switcher bar does NOT use arrow keys
+  (deviation from the prototype skill): arrows are the thing being tested.
+  URL params: variant, day (0-6, Sat=0), size, flash=1, dbl=banner|scaled, i (screen), bar=0
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kitchen Display PROTOTYPE</title>
+<style>
+  * { box-sizing: border-box; }
+  html { font-size: calc(3.1vmin * var(--size, 1)); }
+  body { margin: 0; background: #fff; color: #000; font-family: Roboto, "Helvetica Neue", Arial, sans-serif; line-height: 1.3; -webkit-font-smoothing: none; }
+  b, strong { font-weight: 700; }
+  .muted { color: #444; }
+  .tag { display: inline-block; border: 2px solid #000; padding: 0 .35em; font-size: .8em; font-weight: 700; margin-right: .3em; vertical-align: middle; text-transform: uppercase; letter-spacing: .03em; }
+  .tag.inv { background: #000; color: #fff; }
+  .free-hatch { background: repeating-linear-gradient(135deg, #fff 0 8px, #ddd 8px 10px); }
+  #flash { position: fixed; inset: 0; background: #000; z-index: 50; display: none; }
+  .screen { height: 100vh; display: flex; flex-direction: column; padding: .8rem 1rem; overflow: hidden; }
+  .fit { flex: 1; overflow: hidden; min-height: 0; }
+  .bar-pad .screen, .bar-pad .split { height: calc(100vh - var(--barh, 0px)); }
+  .ings { list-style: none; margin: 0; padding: 0; }
+  .ings li { padding: .12em 0; border-bottom: 1px solid #bbb; break-inside: avoid; }
+  .grp { font-weight: 700; text-transform: uppercase; font-size: .75em; letter-spacing: .05em; margin: .5em 0 .1em; break-after: avoid; }
+  .cols2 { columns: 2; column-gap: 1.2rem; }
+
+  /* ---------- A: Deck ---------- */
+  .A-head { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 3px solid #000; padding-bottom: .3rem; margin-bottom: .6rem; font-size: .95em; }
+  .A-week .row { display: grid; grid-template-columns: 4.2rem 1fr; gap: .6rem; align-items: center; padding: .45rem .5rem; border-bottom: 2px solid #000; font-size: 1.25em; }
+  .A-week .row.today { background: #000; color: #fff; }
+  .A-week .row.today .tag { border-color: #fff; }
+  .today .muted { color: #fff; }
+  .portrait .B-ings .ings { columns: 2; column-gap: 1em; }
+  .A-week .row .d { font-weight: 700; font-size: .95em; line-height: 1.1; }
+  .A-week .row .second { font-style: italic; padding-left: 1.2rem; }
+  .A-title { font-size: 2.1em; font-weight: 800; line-height: 1.05; margin: .2rem 0 .4rem; }
+  .A-step { font-size: 1.75em; line-height: 1.32; font-weight: 500; }
+  .A-need { border: 3px solid #000; padding: .4rem .6rem; margin-top: .8rem; font-size: 1.05em; }
+  .A-need .lbl { font-weight: 800; text-transform: uppercase; font-size: .75em; letter-spacing: .06em; }
+  .A-foot { display: flex; justify-content: space-between; border-top: 3px solid #000; padding-top: .3rem; margin-top: .4rem; font-size: .9em; gap: 1rem; }
+  .A-foot .next { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .prog { display: flex; gap: 3px; margin-top: .3rem; }
+  .prog i { flex: 1; height: .45rem; border: 2px solid #000; }
+  .prog i.on { background: #000; }
+  .big-msg { font-size: 2.2em; font-weight: 800; line-height: 1.15; }
+
+  /* ---------- E: Deck + upcoming steps ---------- */
+  .E-cur { flex: 0 1 auto; max-height: 90%; }
+  .E-cur .A-step { font-weight: 500; font-size: 1.6em; }
+  .E-rest, .E-next { font-weight: 400; color: #222; }
+  .E-cur .ing, .E-next .ing { color: #000; font-weight: 800; }
+  .E-rest { flex: 1; min-height: 0; overflow: hidden; border-top: 3px solid #000; margin-top: .6rem; padding-top: .3rem; color: #444; font-size: 1.05em; line-height: 1.3; }
+  .E-rest .h { font-weight: 800; text-transform: uppercase; font-size: .7em; letter-spacing: .05em; color: #000; margin: .3em 0 .1em; }
+  .E-next { margin: 0 0 .45em; }
+  .E-next .n { font-weight: 800; color: #000; margin-right: .3em; }
+
+  /* ---------- B: Split ---------- */
+  .split { height: 100vh; display: grid; grid-template-rows: auto 1fr; overflow: hidden; }
+  .B-strip { display: grid; grid-template-columns: repeat(7, 1fr); border-bottom: 3px solid #000; }
+  .B-strip > div { padding: .25rem .3rem; border-right: 1px solid #000; font-size: .72em; line-height: 1.15; overflow: hidden; height: 3.3rem; }
+  .B-strip > div:last-child { border-right: 0; }
+  .B-strip .today { background: #000; color: #fff; }
+  .B-strip .dw { font-weight: 800; display: block; }
+  .B-body { display: grid; min-height: 0; overflow: hidden; }
+  .landscape .B-body { grid-template-columns: 38% 1fr; }
+  .portrait .B-body { grid-template-rows: 1fr auto; }
+  .B-ings { padding: .5rem .8rem; overflow: hidden; font-size: .78em; }
+  .landscape .B-ings { border-right: 3px solid #000; }
+  .portrait .B-ings { border-top: 3px solid #000; order: 2; max-height: 42vh; }
+  .portrait .D .B-ings { max-height: 32vh; }
+  .B-ings li.hit { font-weight: 800; background: #000; color: #fff; padding-left: .3em; }
+  .B-main { padding: .7rem 1rem; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .B-main .where { font-size: .9em; font-weight: 700; border-bottom: 2px solid #000; padding-bottom: .2rem; margin-bottom: .5rem; display: flex; justify-content: space-between; }
+  .B-main .step { font-size: 1.6em; line-height: 1.32; font-weight: 500; }
+
+  /* ---------- D: Split, full method ---------- */
+  .D-steps { font-size: 1.15em; line-height: 1.3; }
+  .D-steps .h { font-weight: 800; text-transform: uppercase; font-size: .7em; letter-spacing: .05em; border-bottom: 2px solid #000; margin: .5em 0 .2em; }
+  .D-steps .st { padding: .25em .4em; margin: .15em 0; border-left: .35em solid transparent; color: #555; }
+  .D-steps .st.done { color: #888; }
+  .D-steps .st.active { color: #000; font-weight: 600; border: 3px solid #000; border-left-width: .6em; }
+  .D-steps .n { font-weight: 800; margin-right: .3em; }
+
+  /* ---------- C: Cursor ---------- */
+  .C-wrap { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  .bar-pad .C-wrap { height: calc(100vh - var(--barh, 0px)); }
+  .C-top { background: #fff; border-bottom: 3px solid #000; padding: .35rem .8rem; font-size: .8em; }
+  .C-top .wk span { margin-right: .7em; white-space: nowrap; }
+  .C-top .wk .today { background: #000; color: #fff; padding: 0 .25em; font-weight: 800; }
+  .C-top .wk .second { font-style: italic; }
+  .C-top .pos { font-weight: 800; font-size: .95em; }
+  .C-doc { padding: .6rem 1rem 60vh; font-size: 1.05em; flex: 1; overflow: hidden; min-height: 0; }
+  .C-doc h1 { font-size: 1.9em; margin: .2rem 0 .3rem; line-height: 1.05; }
+  .C-doc h2 { font-size: 1.1em; text-transform: uppercase; letter-spacing: .05em; border-bottom: 2px solid #000; margin: 1rem 0 .3rem; }
+  .C-blk { padding: .45rem .6rem; margin: .2rem 0; border-left: .45rem solid transparent; color: #555; }
+  .C-blk.active { border: 3px solid #000; border-left-width: .7rem; color: #000; font-size: 1.35em; line-height: 1.3; font-weight: 500; }
+  .C-blk.active.ing { font-size: 1em; }
+  .C-blk .n { font-weight: 800; margin-right: .3em; }
+  .C-blk.done { color: #888; }
+
+  /* ---------- switcher bar (prototype only) ---------- */
+  #bar { position: fixed; left: 50%; bottom: 6px; transform: translateX(-50%); z-index: 60; background: #000; color: #fff; border-radius: 14px; padding: 6px 10px; font: 14px/1.2 Arial, sans-serif; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; justify-content: center; max-width: 98vw; }
+  #bar button { font: inherit; background: #fff; color: #000; border: 0; border-radius: 6px; padding: 5px 9px; min-width: 32px; font-weight: 700; }
+  #bar button.on { outline: 3px solid #fff; background: #000; color: #fff; }
+  #bar .grp2 { display: flex; gap: 4px; align-items: center; }
+  #bar .lbl { font-weight: 700; padding: 0 4px; }
+  #dbg { position: fixed; top: 0; right: 0; z-index: 61; background: #000; color: #fff; font: 11px/1.3 monospace; padding: 2px 6px; }
+  #show { position: fixed; right: 4px; bottom: 4px; z-index: 60; font: 16px Arial; border: 2px solid #000; background: #fff; padding: 4px 8px; display: none; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="flash"></div>
+<div id="dbg"></div>
+<div id="bar"></div>
+<button id="show">⚙</button>
+<script>
+/*DATA*/
+const D = window.DATA;
+const days = D.week.days;
+const VARIANTS = { A: "Deck", B: "Split", C: "Cursor", D: "Split, full method", E: "Deck + upcoming steps" };
+const P = new URLSearchParams(location.search);
+const todayIdx = days.findIndex((d) => d.date === new Date().toISOString().slice(0, 10));
+const S = {
+  variant: VARIANTS[P.get("variant")] ? P.get("variant") : "E",
+  day: P.has("day") ? +P.get("day") : todayIdx >= 0 ? todayIdx : 2,
+  size: +(P.get("size") || 1),
+  flash: P.get("flash") === "1",
+  dbl: P.get("dbl") || "scaled",
+  i: P.has("i") ? +P.get("i") : null,
+  bar: P.get("bar") !== "0",
+};
+let lastKey = "–";
+
+// ---------- helpers ----------
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const FR = { "½": 0.5, "¼": 0.25, "¾": 0.75, "⅓": 1 / 3, "⅔": 2 / 3 };
+function fmtNum(n) {
+  const w = Math.floor(n + 1e-9), f = n - w;
+  const fr = Object.entries(FR).find(([, v]) => Math.abs(v - f) < 0.02);
+  if (f < 0.02) return String(w);
+  if (fr) return (w ? w : "") + fr[0];
+  return String(Math.round(n * 10) / 10);
+}
+function scale(amount, mult) {
+  if (mult === 1 || !amount) return amount;
+  return amount.replace(/^(\d+(?:[.,]\d+)?)?\s?([½¼¾⅓⅔])?(?:\s?(\d+)\/(\d+))?(?:\s?[–-]\s?(\d+(?:[.,]\d+)?))?/, (m, a, u, fn, fd, b) => {
+    if (!m.trim()) return m;
+    let n = (a ? parseFloat(a.replace(",", ".")) : 0) + (u ? FR[u] : 0) + (fn ? fn / fd : 0);
+    const rest = m.match(/\s$/) ? " " : "";
+    return fmtNum(n * mult) + (b ? "–" + fmtNum(parseFloat(b) * mult) : "") + rest;
+  });
+}
+function md(s, mult = 1) {
+  return esc(s)
+    .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+    .replace(/\*([^*]+)\*/g, (_, x) => `<b>${scale(x, mult)}</b>`);
+}
+// A step with each "*amount* ingredient name" marked as one .ing span; the name ends at the first word not in the ingredient list.
+const JOIN = new Set("and or of the with in for to into a an on until".split(" "));
+const stem = (w) => w.replace(/(es|s)$/, "");
+function stepHtml(s, mult, r) {
+  const vocab = new Set(r.groups.flatMap((g) => g.items).flatMap((it) => it.text.toLowerCase().split(/[^a-zà-ÿ]+/)).filter((w) => w.length > 1).map(stem));
+  return esc(s)
+    .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+    .replace(/\*([^*]+)\*((?:\s+[A-Za-zÀ-ÿ-]+)*)/g, (_, amt, tail) => {
+      const words = tail.match(/\s+[A-Za-zÀ-ÿ-]+/g) || [];
+      let k = 0;
+      while (k < words.length && k < 4) {
+        const w = words[k].trim().toLowerCase();
+        if (JOIN.has(w) || !vocab.has(stem(w))) break;
+        k++;
+      }
+      return `<span class="ing">${scale(amt, mult)}${words.slice(0, k).join("")}</span>${words.slice(k).join("")}`;
+    });
+}
+const STOP = new Set("fresh large small medium whole ground dried chopped sliced peeled plain unsweetened divided plus more taste and or of the a an to for with extra firm low sodium finely thinly roughly lightly cracked stalks cloves clove leaves stems optional kosher neutral yellow white green red cut into florets diced minced grated shredded pressed drained washed deseeded semi skimmed some about use see note warm cold hot heaping organic toasted inch piece pieces bunch block cup cups tbsp tsp tl el ml g kg oz can cans packed tender only sea flavored flavoured greasing brush melted until".split(" "));
+function keywords(text) {
+  const base = text.toLowerCase().replace(/\(.*?\)/g, " ").replace(/\*[^*]*\*/g, " ").split(",")[0];
+  return [...new Set(base.split(/[^a-zà-ÿ]+/).filter((w) => w.length >= 3 && !STOP.has(w)).map((w) => w.replace(/(es|s)$/, "")).filter((w) => w.length >= 3))];
+}
+function matches(item, stepText) {
+  const t = stepText.toLowerCase();
+  return keywords(item.text).some((k) => new RegExp("\\b" + k.replace(/[^a-z]/g, "") + "(e?s)?\\b").test(t));
+}
+
+// ---------- today's context ----------
+function ctx(di) {
+  const day = days[di];
+  if (day.free) return { day, kind: "free" };
+  const recipe = day.dinner && D.recipes[day.dinner.name];
+  const side = day.side && D.recipes[day.side.name];
+  const isSecond = /2nd day/i.test(day.note);
+  const isCook = /double: cook/i.test(day.note);
+  const novel = /novel/i.test(day.note);
+  if (isSecond) {
+    const cookIdx = [...days.keys()].reverse().find((k) => k < di && days[k].dinner?.name === day.dinner.name);
+    return { day, kind: "second", recipe, cookedOn: cookIdx != null ? days[cookIdx] : null, next: days[di + 1] };
+  }
+  const mult = isCook && S.dbl === "scaled" ? 2 : 1;
+  // a cooking sequence: main steps then side steps, each with its recipe
+  const steps = [];
+  recipe?.steps.forEach((s, k) => steps.push({ r: recipe, s, k, n: recipe.steps.length }));
+  side?.steps.forEach((s, k) => steps.push({ r: side, s, k, n: side.steps.length }));
+  return { day, kind: "cook", recipe, side, isCook, novel, mult, steps, coversNext: isCook ? days[di + 1] : null };
+}
+const shortName = (n) => n.length > 16 ? n.split(" ").slice(0, 2).join(" ") : n;
+function dayLine(d, opts = {}) {
+  if (d.free) return `Free Day`;
+  const second = /2nd day/i.test(d.note);
+  let s = second ? `↳ ${esc(d.dinner.name)} <span class="muted">(leftovers)</span>` : `${esc(d.dinner.name)}`;
+  if (d.side && !opts.noSide) s += ` <span class="muted">+ ${esc(d.side.name)}</span>`;
+  if (/novel/i.test(d.note)) s += ` <span class="tag">New</span>`;
+  if (/double: cook/i.test(d.note)) s += ` <span class="tag">×2</span>`;
+  return s;
+}
+function tagsFor(c) {
+  let t = "";
+  if (c.novel) t += `<span class="tag inv">Novel · first time</span>`;
+  if (c.isCook) t += `<span class="tag inv">Double: cook for ${esc(c.coversNext?.dow ?? "tomorrow")} too</span>`;
+  return t;
+}
+function ingList(r, mult, hitFn) {
+  return r.groups.map((g) => (g.title ? `<div class="grp">${esc(g.title)}</div>` : "") +
+    `<ul class="ings">${g.items.map((it) => `<li class="${hitFn && hitFn(it) ? "hit" : ""}">${it.amount ? `<b>${esc(scale(it.amount, mult))}</b> ` : ""}${md(it.text)}</li>`).join("")}</ul>`).join("");
+}
+function doubleBanner(c) {
+  if (!c.isCook || S.dbl === "scaled") return "";
+  return `<div class="A-need" style="margin:.3rem 0 .5rem"><b>Cook ×2</b>: amounts below are as written${c.recipe.serves ? ` (serves ${esc(c.recipe.serves)})` : ""}. Double them so it covers ${esc(c.coversNext?.dow ?? "tomorrow")}.</div>`;
+}
+function restMessage(c) {
+  if (c.kind === "free") return `<div class="big-msg">Free Day</div><p style="font-size: 1.3em">Nothing planned tonight: eat out, takeaway, or odds and ends.</p><p class="muted" style="font-size: 1.1em">Next Week Menu starts Saturday.</p>`;
+  return `<div class="big-msg">${esc(c.day.dinner.name)}</div>
+    <p style="font-size: 1.5em;font-weight:700">2nd day of the Double: leftovers${c.cookedOn ? ` from ${esc(c.cookedOn.dow)}` : ""}.</p>
+    <p style="font-size: 1.25em">Reheat gently, add a splash of water if it's thick. No cooking tonight.</p>
+    ${c.next ? `<p class="muted" style="font-size: 1.1em">Tomorrow: ${dayLine(c.next)}</p>` : ""}`;
+}
+
+// ---------- A: Deck ----------
+function buildA(c, cursor = false) {
+  const screens = [];
+  const head = (l, r) => `<div class="A-head"><b>${l}</b><span>${r}</span></div>`;
+  screens.push({ name: "week", html: head("Week Menu", `from Sat ${esc(D.week.start.slice(8))}`) +
+    `<div class="fit A-week">${days.map((d, k) => `<div class="row ${k === S.day ? "today" : ""} ${d.free ? "free-hatch" : ""}"><div class="d">${esc(d.dow)}<br>${esc(d.label.split(" ").slice(1).join(" "))}</div><div class="${/2nd/.test(d.note) ? "second" : ""}">${dayLine(d)}</div></div>`).join("")}</div>` });
+  if (c.kind !== "cook") {
+    screens.push({ name: "today", home: true, html: head(esc(c.day.label), "Today") + `<div class="fit ${c.kind === "free" ? "free-hatch" : ""}" style="padding:.5rem">${restMessage(c)}</div>` });
+    return screens;
+  }
+  const r = c.recipe;
+  screens.push({ name: "ingredients", home: true, html: head(esc(c.day.label) + " · Today", `${c.steps.length} steps`) +
+    `<div class="fit"><div class="A-title">${esc(r.title)}</div>${tagsFor(c)}${c.side ? `<div style="font-size: 1.1em;margin:.3rem 0">with <b>${esc(c.side.title)}</b></div>` : ""}${doubleBanner(c)}
+     <div class="cols2" style="font-size: 1em">${ingList(r, c.mult)}${c.side ? `<div class="grp" style="font-size: .95em;border-top:2px solid #000;padding-top:.2em">${esc(c.side.title)}</div>${ingList(c.side, 1)}` : ""}</div></div>` });
+  c.steps.forEach((st, j) => {
+    const need = st.r.groups.flatMap((g) => g.items).filter((it) => matches(it, st.s));
+    const nxt = c.steps[j + 1];
+    const mult = (s) => (s.r === r ? c.mult : 1);
+    if (cursor) {
+      let lastR = st.r;
+      const rest = c.steps.slice(j + 1).map((s) => {
+        const h = s.r !== lastR ? `<div class="h">${esc(s.r.title)}</div>` : "";
+        lastR = s.r;
+        return `${h}<div class="E-next"><span class="n">${s.k + 1}.</span>${stepHtml(s.s, mult(s), s.r)}</div>`;
+      }).join("");
+      screens.push({ name: `step ${j + 1}`, html: head(esc(st.r.title), `Step ${st.k + 1} of ${st.n}`) +
+        `<div class="fit E-cur"><div class="A-step">${stepHtml(st.s, mult(st), st.r)}</div></div>
+         <div class="E-rest">${rest || `<div class="h">Last step</div><div class="E-next">▼ notes</div>`}</div>
+         <div class="prog">${c.steps.map((_, q) => `<i class="${q <= j ? "on" : ""}"></i>`).join("")}</div>` });
+      return;
+    }
+    screens.push({ name: `step ${j + 1}`, html: head(esc(st.r.title), `Step ${st.k + 1} of ${st.n}`) +
+      `<div class="fit"><div class="A-step">${md(st.s, st.r === r ? c.mult : 1)}</div>
+        ${need.length ? `<div class="A-need"><div class="lbl">You need</div>${need.map((it) => `${it.amount ? `<b>${esc(scale(it.amount, st.r === r ? c.mult : 1))}</b> ` : ""}${md(it.text.split(",")[0])}`).join(" · ")}</div>` : ""}</div>
+       <div class="A-foot"><span class="next">${nxt ? `▼ ${nxt.r !== st.r ? `<b>${esc(nxt.r.title)}:</b> ` : ""}${esc(nxt.s.replace(/\*/g, "").slice(0, 60))}…` : "▼ notes"}</span></div>
+       <div class="prog">${c.steps.map((_, q) => `<i class="${q <= j ? "on" : ""}"></i>`).join("")}</div>` });
+  });
+  const notes = [...r.notes, ...(c.side?.notes ?? [])];
+  screens.push({ name: "notes", html: head(esc(r.title), "Notes") + `<div class="fit" style="font-size: 1.2em">${notes.length ? notes.map((n) => `<p>${md(n)}</p>`).join("") : "<p>No notes.</p>"}${r.source ? `<p class="muted" style="font-size: .9em">Source: ${esc(r.source)}</p>` : ""}<p class="big-msg" style="margin-top:1rem">Eet smakelijk.</p></div>` });
+  return screens;
+}
+
+// ---------- B: Split ----------
+function buildB(c, portrait) {
+  const strip = `<div class="B-strip">${days.map((d, k) => `<div class="${k === S.day ? "today" : ""} ${d.free ? "free-hatch" : ""}"><span class="dw">${esc(d.dow)} ${esc(d.label.split(" ")[1])}</span>${d.free ? "Free" : /2nd/.test(d.note) ? `<i>↳ leftovers</i>` : esc(shortName(d.dinner.name)) + (/novel/i.test(d.note) ? " ★" : "")}</div>`).join("")}</div>`;
+  if (c.kind !== "cook") return [{ name: "today", home: true, html: `<div class="split">${strip}<div class="B-main ${c.kind === "free" ? "free-hatch" : ""}">${restMessage(c)}</div></div>` }];
+  const r = c.recipe;
+  const screens = [];
+  const total = c.steps.length;
+  const mk = (j) => {
+    const st = j >= 0 ? c.steps[j] : null;
+    const hit = st ? (it) => matches(it, st.s) : null;
+    const showSide = st ? st.r === c.side : false;
+    const ingR = showSide ? c.side : r;
+    const main = st
+      ? `<div class="where"><span>${esc(st.r.title)}</span><span>Step ${st.k + 1}/${st.n}${c.side ? ` · ${j + 1}/${total} total` : ""}</span></div><div class="fit"><div class="step">${md(st.s, st.r === r ? c.mult : 1)}</div></div>`
+      : `<div class="where"><span>Today · ${esc(c.day.label)}</span><span>${total} steps</span></div><div class="fit"><div class="A-title">${esc(r.title)}</div>${tagsFor(c)}${c.side ? `<p style="font-size: 1.2em">with <b>${esc(c.side.title)}</b> (its steps come after the main)</p>` : ""}${doubleBanner(c)}<p class="muted" style="font-size: 1.1em">▼ to start cooking</p></div>`;
+    return `<div class="split">${strip}<div class="B-body"><div class="B-ings fitlist">${ingR !== r ? `<div class="grp">${esc(ingR.title)}</div>` : ""}${ingList(ingR, ingR === r ? c.mult : 1, hit)}</div><div class="B-main">${main}</div></div></div>`;
+  };
+  screens.push({ name: "overview", home: true, html: mk(-1) });
+  c.steps.forEach((_, j) => screens.push({ name: `step ${j + 1}`, html: mk(j) }));
+  return screens;
+}
+
+// ---------- D: Split, full method on the right ----------
+function buildD(c) {
+  const strip = `<div class="B-strip">${days.map((d, k) => `<div class="${k === S.day ? "today" : ""} ${d.free ? "free-hatch" : ""}"><span class="dw">${esc(d.dow)} ${esc(d.label.split(" ")[1])}</span>${d.free ? "Free" : /2nd/.test(d.note) ? `<i>↳ leftovers</i>` : esc(shortName(d.dinner.name)) + (/novel/i.test(d.note) ? " ★" : "")}</div>`).join("")}</div>`;
+  if (c.kind !== "cook") return [{ name: "today", home: true, html: `<div class="split">${strip}<div class="B-main ${c.kind === "free" ? "free-hatch" : ""}">${restMessage(c)}</div></div>` }];
+  const r = c.recipe;
+  const total = c.steps.length;
+  const mk = (j) => {
+    const st = j >= 0 ? c.steps[j] : null;
+    const hit = st ? (it) => matches(it, st.s) : null;
+    const ingR = st && st.r === c.side ? c.side : r;
+    let lastR = null;
+    const method = c.steps.map((s, q) => {
+      const h = s.r !== lastR ? `<div class="h">${s.r === r ? "Method" : esc(s.r.title) + ": method"}</div>` : "";
+      lastR = s.r;
+      return `${h}<div class="st ${q === j ? "active" : q < j ? "done" : ""}" ${q === j ? 'id="dact"' : ""}><span class="n">${s.k + 1}.</span>${md(s.s, s.r === r ? c.mult : 1)}</div>`;
+    }).join("");
+    const where = st
+      ? `<span>${esc(st.r.title)}</span><span>Step ${st.k + 1}/${st.n}${c.side ? ` · ${j + 1}/${total} total` : ""}</span>`
+      : `<span>Today · ${esc(c.day.label)}</span><span>${total} steps · ▼ to start</span>`;
+    const intro = st ? "" : `<div class="A-title" style="font-size:1.6em">${esc(r.title)}</div>${tagsFor(c)}${c.side ? ` with <b>${esc(c.side.title)}</b>` : ""}${doubleBanner(c)}`;
+    return `<div class="split D">${strip}<div class="B-body"><div class="B-ings fitlist">${ingR !== r ? `<div class="grp">${esc(ingR.title)}</div>` : ""}${ingList(ingR, ingR === r ? c.mult : 1, hit)}</div><div class="B-main"><div class="where">${where}</div><div class="fit D-fit">${intro}<div class="D-steps">${method}</div></div></div></div></div>`;
+  };
+  return [{ name: "overview", home: true, html: mk(-1) }, ...c.steps.map((_, j) => ({ name: `step ${j + 1}`, html: mk(j) }))];
+}
+
+// ---------- C: Cursor ----------
+function buildC(c) {
+  const wk = days.map((d, k) => `<span class="${k === S.day ? "today" : ""} ${/2nd/.test(d.note) ? "second" : ""}">${esc(d.dow.slice(0, 2))} ${d.free ? "—" : /2nd/.test(d.note) ? "(leftovers)" : esc(shortName(d.dinner.name))}${/novel/i.test(d.note) ? "★" : ""}</span>`).join("");
+  if (c.kind !== "cook") return { blocks: 1, html: (pos) => `<div class="C-wrap"><div class="C-top"><div class="wk">${wk}</div></div><div class="C-doc ${c.kind === "free" ? "free-hatch" : ""}">${restMessage(c)}</div></div>` };
+  const r = c.recipe;
+  const blocks = [];
+  blocks.push({ label: "Ingredients", html: `<h2>Ingredients</h2>${doubleBanner(c)}<div class="cols2">${ingList(r, c.mult)}</div>${c.side ? `<h2>${esc(c.side.title)}</h2><div class="cols2">${ingList(c.side, 1)}</div>` : ""}`, wrap: true });
+  let lastR = null;
+  c.steps.forEach((st, j) => {
+    const h = st.r !== lastR ? `<h2>${st.r === r ? "Method" : esc(st.r.title) + ": method"}</h2>` : "";
+    lastR = st.r;
+    blocks.push({ label: `${st.r.title} step ${st.k + 1}/${st.n}`, pre: h, html: `<span class="n">${st.k + 1}.</span>${md(st.s, st.r === r ? c.mult : 1)}` });
+  });
+  const notes = r.notes;
+  return {
+    blocks: blocks.length,
+    html: (pos) => `<div class="C-wrap"><div class="C-top"><div class="wk">${wk}</div><div class="pos">${esc(c.day.label)} · ${esc(blocks[pos].label)}</div></div>
+      <div class="C-doc" id="cdoc"><h1>${esc(r.title)}</h1>${tagsFor(c)}${c.side ? `<div>with <b>${esc(c.side.title)}</b></div>` : ""}
+      ${blocks.map((b, k) => `${b.pre ?? ""}<div class="C-blk ${b.wrap ? "ing" : ""} ${k === pos ? "active" : k < pos ? "done" : ""}" id="blk${k}">${b.html}</div>`).join("")}
+      ${notes.length ? `<h2>Notes</h2>${notes.map((n) => `<p>${md(n)}</p>`).join("")}` : ""}</div></div>`,
+  };
+}
+
+// ---------- render ----------
+function fitAll() {
+  document.querySelectorAll(".fit, .fitlist").forEach((el) => {
+    let f = 100;
+    el.style.fontSize = "";
+    const base = parseFloat(getComputedStyle(el).fontSize);
+    while (el.scrollHeight > el.clientHeight + 1 && f > 45) { f -= 5; el.style.fontSize = (base * f) / 100 + "px"; }
+    el.dataset.fit = f;
+  });
+}
+let screens = [], count = 1;
+function render() {
+  document.documentElement.style.setProperty("--size", S.size);
+  const c = ctx(S.day);
+  const portrait = innerHeight >= innerWidth;
+  document.body.className = (portrait ? "portrait" : "landscape") + (S.bar ? " bar-pad" : "");
+  renderBar();
+  document.documentElement.style.setProperty("--barh", S.bar ? document.getElementById("bar").offsetHeight + 10 + "px" : "0px");
+  const app = document.getElementById("app");
+  if (S.variant === "C") {
+    const doc = buildC(c);
+    count = doc.blocks;
+    if (S.i == null || S.i >= count) S.i = 0;
+    app.innerHTML = doc.html(S.i);
+    const el = document.getElementById("blk" + S.i);
+    const cdoc = document.getElementById("cdoc");
+    if (el && cdoc) cdoc.scrollTop = Math.max(0, el.offsetTop - cdoc.offsetTop - 12);
+  } else {
+    screens = S.variant === "A" ? buildA(c) : S.variant === "E" ? buildA(c, true) : S.variant === "D" ? buildD(c) : buildB(c, portrait);
+    count = screens.length;
+    if (S.i == null || S.i >= count) S.i = Math.max(0, screens.findIndex((s) => s.home));
+    const s = screens[S.i];
+    app.innerHTML = S.variant === "A" || S.variant === "E" ? `<div class="screen">${s.html}</div>` : s.html;
+    window.scrollTo(0, 0);
+    fitAll();
+    const rest = document.querySelector(".E-rest");
+    if (rest) {
+      const bottom = rest.getBoundingClientRect().bottom;
+      let cut = false;
+      rest.querySelectorAll(".E-next, .h").forEach((el) => {
+        const box = el.getBoundingClientRect();
+        if (cut || box.bottom <= bottom) { if (cut) el.style.display = "none"; return; }
+        cut = true;
+        const lines = Math.floor((bottom - box.top) / parseFloat(getComputedStyle(el).lineHeight));
+        if (lines < 1) { el.style.display = "none"; return; }
+        Object.assign(el.style, { display: "-webkit-box", webkitBoxOrient: "vertical", webkitLineClamp: String(lines), overflow: "hidden" });
+      });
+    }
+    const act = document.getElementById("dact"), dfit = document.querySelector(".D-fit");
+    if (act && dfit && dfit.scrollHeight > dfit.clientHeight + 1) dfit.scrollTop = Math.max(0, act.offsetTop - dfit.offsetTop - dfit.clientHeight / 3);
+  }
+  syncUrl();
+  const fitEl = document.querySelector(".fit");
+  document.getElementById("dbg").textContent = `v10 · ${S.variant} · screen ${S.i + 1}/${count} · ${innerWidth}×${innerHeight}@${devicePixelRatio} · key: ${lastKey}${fitEl?.dataset.fit && fitEl.dataset.fit !== "100" ? ` · shrunk ${fitEl.dataset.fit}%` : ""}`;
+  document.getElementById("dbg").style.display = S.bar ? "" : "none";
+}
+function syncUrl() {
+  const p = new URLSearchParams({ variant: S.variant, day: S.day, size: S.size, i: S.i });
+  if (S.flash) p.set("flash", "1");
+  if (S.dbl !== "scaled") p.set("dbl", S.dbl);
+  if (!S.bar) p.set("bar", "0");
+  history.replaceState(null, "", "?" + p);
+}
+function go(delta) {
+  const n = Math.min(count - 1, Math.max(0, S.i + delta));
+  if (n === S.i) return;
+  S.i = n;
+  render();
+  if (S.flash) { const f = document.getElementById("flash"); f.style.display = "block"; setTimeout(() => (f.style.display = "none"), 120); }
+}
+function set(patch) { Object.assign(S, patch); render(); }
+function renderBar() {
+  const bar = document.getElementById("bar");
+  document.getElementById("show").style.display = S.bar ? "none" : "block";
+  bar.style.display = S.bar ? "flex" : "none";
+  if (!S.bar) return;
+  const keys = Object.keys(VARIANTS);
+  const vi = keys.indexOf(S.variant);
+  bar.innerHTML = `
+    <span class="grp2"><button data-a="vprev">‹</button><span class="lbl">${S.variant} (${VARIANTS[S.variant]})</span><button data-a="vnext">›</button></span>
+    <span class="grp2"><button data-a="prev">▲</button><button data-a="next">▼</button></span>
+    <span class="grp2">${days.map((d, k) => `<button data-day="${k}" class="${k === S.day ? "on" : ""}">${esc(d.dow.slice(0, 2))}</button>`).join("")}</span>
+    <span class="grp2"><button data-a="smaller">A−</button><span class="lbl">${Math.round(S.size * 100)}%</span><button data-a="bigger">A+</button></span>
+    <span class="grp2"><button data-a="flash" class="${S.flash ? "on" : ""}">flash</button><button data-a="dbl" class="${S.dbl === "scaled" ? "on" : ""}">×2 ${S.dbl === "scaled" ? "scaled" : "banner"}</button><button data-a="hide">hide</button></span>`;
+  bar.onclick = (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.day) return set({ day: +b.dataset.day, i: null });
+    ({
+      vprev: () => set({ variant: keys[(vi + keys.length - 1) % keys.length], i: null }),
+      vnext: () => set({ variant: keys[(vi + 1) % keys.length], i: null }),
+      prev: () => go(-1), next: () => go(1),
+      smaller: () => set({ size: Math.max(0.6, +(S.size - 0.1).toFixed(2)) }),
+      bigger: () => set({ size: Math.min(2, +(S.size + 0.1).toFixed(2)) }),
+      flash: () => set({ flash: !S.flash }),
+      dbl: () => set({ dbl: S.dbl === "scaled" ? "banner" : "scaled" }),
+      hide: () => set({ bar: false }),
+    })[b.dataset.a]?.();
+  };
+}
+document.getElementById("show").onclick = () => set({ bar: true });
+const NEXT = new Set(["PageDown", "ArrowDown", "ArrowRight", " ", "Enter", "AudioVolumeDown", "VolumeDown", "MediaTrackNext"]);
+const PREV = new Set(["PageUp", "ArrowUp", "ArrowLeft", "Backspace", "AudioVolumeUp", "VolumeUp", "MediaTrackPrevious"]);
+addEventListener("keydown", (e) => {
+  lastKey = `${e.key}/${e.code || "-"}/${e.keyCode}`;
+  if (NEXT.has(e.key) || e.keyCode === 34) { e.preventDefault(); go(1); }
+  else if (PREV.has(e.key) || e.keyCode === 33) { e.preventDefault(); go(-1); }
+  else if (e.key === "Home") { e.preventDefault(); set({ i: null }); }
+  else render();
+});
+addEventListener("resize", render);
+render();
+</script>
+</body>
+</html>
