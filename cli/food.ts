@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import path from "node:path";
 import { parseArgs } from "node:util";
+import { AhError, ahGateway, parseAmount } from "./adapters/ah/gateway.ts";
 import { buildBundle } from "./build-bundle.ts";
 import { readConfig, writeConfig } from "./config.ts";
 import { preview } from "./preview.ts";
@@ -15,6 +16,9 @@ Commands:
   preview [--port <n>] [--lan]
                         Serve the Kitchen Display page and a fresh bundle on this Mac
                         (port 8787 by default; --lan to open it on other devices too)
+  ah search <query> [--need <amount>]
+                        Search AH products, cleaned up and cheapest per kg, l or piece first (JSON);
+                        --need (e.g. 400g, 1.5l, 3 for pieces) drops packs that would waste too much
 `;
 
 class UsageError extends Error {}
@@ -55,13 +59,39 @@ async function main(args: string[]): Promise<void> {
       preview({ vault: await vaultPath(), port, lan: values.lan, now });
       return;
     }
+    case "ah":
+      return ah(rest);
+    default:
+      throw new UsageError(usage);
+  }
+}
+
+async function ah(args: string[]): Promise<void> {
+  const [command, ...rest] = args;
+  const gateway = ahGateway(await readConfig());
+  const print = (value: unknown) => process.stdout.write(JSON.stringify(value, null, 2) + "\n");
+  switch (command) {
+    case "search": {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        allowPositionals: true,
+        options: { need: { type: "string" } },
+      });
+      if (positionals.length === 0) throw new UsageError(usage);
+      const need = values.need === undefined ? undefined : parseAmount(values.need);
+      if (need === null) {
+        throw new UsageError(`--need must be an amount such as 400g, 1.5l or 3 (pieces), not "${values.need}"`);
+      }
+      print(await gateway.searchProducts(positionals.join(" "), { need }));
+      return;
+    }
     default:
       throw new UsageError(usage);
   }
 }
 
 main(process.argv.slice(2)).catch((error) => {
-  const expected = error instanceof UsageError || error instanceof VaultError;
+  const expected = error instanceof UsageError || error instanceof VaultError || error instanceof AhError;
   process.stderr.write(expected ? error.message.trimEnd() + "\n" : `${error.stack ?? error}\n`);
   process.exitCode = 1;
 });

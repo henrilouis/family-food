@@ -1,5 +1,5 @@
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { cp, mkdtemp } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,6 +14,10 @@ export type RunResult = { code: number; stdout: string; stderr: string };
 export type Sandbox = {
   /** The temp copy of the sample Recipe Vault. */
   vault: string;
+  /** The local config folder (`FOOD_CONFIG_DIR`). */
+  configDir: string;
+  /** Switches an adapter to its fake in the local config and returns the fake's (empty) state folder. */
+  fake(adapter: "ah"): Promise<string>;
   /** Runs the real `food` CLI. `now` is local time, e.g. "2026-11-21T10:00". */
   run(args: string[], options?: { now?: string }): Promise<RunResult>;
   /** Runs `food bundle` at local time `now` and parses the bundle it prints. */
@@ -29,10 +33,11 @@ export type Sandbox = {
 export async function sandbox({ configured = true } = {}): Promise<Sandbox> {
   const root = await mkdtemp(path.join(os.tmpdir(), "food-test-"));
   const vault = path.join(root, "Recipes");
+  const configDir = path.join(root, "config");
   await cp(sampleVaultDir, vault, { recursive: true });
   const env = (now?: string) => ({
     ...process.env,
-    FOOD_CONFIG_DIR: path.join(root, "config"),
+    FOOD_CONFIG_DIR: configDir,
     ...(now ? { FOOD_NOW: now } : {}),
   });
 
@@ -62,9 +67,20 @@ export async function sandbox({ configured = true } = {}): Promise<Sandbox> {
     return JSON.parse(result.stdout);
   };
 
+  const fake: Sandbox["fake"] = async (adapter) => {
+    const folder = path.join(root, "fakes", adapter);
+    await mkdir(folder, { recursive: true });
+    const configFile = path.join(configDir, "config.json");
+    const config = JSON.parse(await readFile(configFile, "utf8").catch(() => "{}"));
+    config.fakes = { ...config.fakes, [adapter]: folder };
+    await mkdir(configDir, { recursive: true });
+    await writeFile(configFile, JSON.stringify(config, null, 2) + "\n");
+    return folder;
+  };
+
   if (configured) {
     const result = await run(["config", "vault", vault]);
     if (result.code !== 0) throw new Error(`could not configure the sample vault:\n${result.stderr}`);
   }
-  return { vault, run, bundle, start };
+  return { vault, configDir, fake, run, bundle, start };
 }
