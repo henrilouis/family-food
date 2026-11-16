@@ -56,7 +56,12 @@ export type BasketPlan = {
   optional: string[];
   /** The Cupboard Ingredients left out because they are at home, by ingredient name. */
   haveAtHome: string[];
+  /** What an earlier run recorded in the Week Menu's `## Basket` section; empty when there is none. */
+  recorded: BasketRecord;
 };
+
+/** The products (with AH's title) and free-text notes an earlier run added for the week, from its `## Basket` section. */
+export type BasketRecord = { products: { id: number; title: string; quantity: number }[]; notes: string[] };
 
 /**
  * Works out what the Locked Week Menu starting on `weekStart` needs from AH: each ingredient line as written,
@@ -149,6 +154,7 @@ export async function planBasket(vault: string, weekStart: string, input: Basket
     ),
     optional: [...optional],
     haveAtHome: [...haveAtHome],
+    recorded: basketRecord(note),
   };
 }
 
@@ -213,6 +219,18 @@ function section(body: string, heading: string): string[] {
   return lines.slice(start + 1, end < 0 ? undefined : end);
 }
 
+/** Reads the `## Basket` section's product lines ("- <title> (id <id>) ×<packs>: …") and notes ("- Note: …"). */
+function basketRecord(weekMenu: Note): BasketRecord {
+  const record: BasketRecord = { products: [], notes: [] };
+  for (const line of section(weekMenu.body, BASKET_HEADING)) {
+    const product = line.match(/^- (.+) \(id (\d+)\) ×(\d+): (.*)$/);
+    const note = line.match(/^- Note: (.*)$/);
+    if (product) record.products.push({ id: Number(product[2]), title: product[1], quantity: Number(product[3]) });
+    else if (note) record.notes.push(note[1]);
+  }
+  return record;
+}
+
 /** Rounds up to whole packs, but a Fresh item rounds down when the total is no more than 10% over a whole pack. */
 function wholePacks(total: number, fresh: boolean): number {
   const epsilon = 1e-9;
@@ -248,32 +266,60 @@ function number(q: number): string {
 /** What `food basket fill` did. */
 export type BasketResult = {
   plan: BasketPlan;
-  /** The plan's products, with what Mijn lijst had before (`before`, 0 when new) and AH's title and pack price. */
-  products: { id: number; title: string; quantity: number; before: number; price: number | null; covers: string[] }[];
+  /**
+   * The plan's products, with what this run added (`added`: the difference with the earlier run's record),
+   * what Mijn lijst had before (`before`, 0 when new) and AH's title and pack price.
+   */
+  products: { id: number; title: string; quantity: number; added: number; before: number; price: number | null; covers: string[] }[];
+  /** The free-text notes this run added: the plan's notes an earlier run hadn't added. */
+  addedNotes: string[];
+  /** What an earlier run added that the Week Menu no longer needs and is still in Mijn lijst: for a human to remove. */
+  noLongerNeeded: { products: { id: number; title: string; quantity: number }[]; notes: string[] };
   /** Mijn lijst's estimated total after adding, from the prices AH gives. */
   total: number;
 };
 
-/** Adds the plan to Mijn lijst: products merge into lines already there, unmatched items go in as free-text notes. Never removes anything. */
+/**
+ * Adds to Mijn lijst what the plan needs beyond what an earlier run recorded: products merge into lines already
+ * there, unmatched items go in as free-text notes. Never removes anything; what is no longer needed is only listed.
+ */
 export async function fillBasket(plan: BasketPlan, gateway: AhGateway): Promise<BasketResult> {
+  const { recorded } = plan;
+  const recordedQuantity = (id: number) => recorded.products.find((p) => p.id === id)?.quantity ?? 0;
   const before = await gateway.readBasket();
-  const after = await gateway.addToBasket({
-    products: plan.products.map(({ id, quantity }) => ({ id, quantity })),
-    notes: plan.notes.map((description) => ({ description, quantity: 1 })),
-  });
+  const additions = {
+    products: plan.products
+      .map(({ id, quantity }) => ({ id, quantity: quantity - recordedQuantity(id) }))
+      .filter((p) => p.quantity > 0),
+    notes: plan.notes.filter((note) => !recorded.notes.includes(note)).map((description) => ({ description, quantity: 1 })),
+  };
+  const after = additions.products.length || additions.notes.length ? await gateway.addToBasket(additions) : before;
+  const inList = (id: number) => before.products.find((p) => p.id === id)?.quantity ?? 0;
   return {
     plan,
     products: plan.products.map(({ id, quantity, covers }) => {
-      const inList = after.products.find((p) => p.id === id);
+      const line = after.products.find((p) => p.id === id);
       return {
         id,
         quantity,
         covers,
-        title: inList?.title ?? `product ${id}`,
-        price: inList?.price ?? null,
-        before: before.products.find((p) => p.id === id)?.quantity ?? 0,
+        title: line?.title ?? recorded.products.find((p) => p.id === id)?.title ?? `product ${id}`,
+        price: line?.price ?? null,
+        added: additions.products.find((p) => p.id === id)?.quantity ?? 0,
+        before: inList(id),
       };
     }),
+    addedNotes: additions.notes.map((n) => n.description),
+    noLongerNeeded: {
+      products: recorded.products
+        .map(({ id, title, quantity }) => ({
+          id,
+          title,
+          quantity: Math.min(quantity - (plan.products.find((p) => p.id === id)?.quantity ?? 0), inList(id)),
+        }))
+        .filter((p) => p.quantity > 0),
+      notes: recorded.notes.filter((note) => !plan.notes.includes(note) && before.notes.some((n) => n.description === note)),
+    },
     total: after.products.reduce((sum, p) => sum + (p.price ?? 0) * p.quantity, 0),
   };
 }
@@ -304,21 +350,33 @@ export async function writeBasketSection(result: BasketResult): Promise<void> {
 
 /** The report for the person filling the Basket; it ends with the checkout reminder. */
 export function formatReport(result: BasketResult): string {
-  const { plan } = result;
+  const { plan, noLongerNeeded } = result;
   const euro = (amount: number) => `€${amount.toFixed(2)}`;
-  const group = (heading: string, items: string[]) =>
-    items.length ? `${heading}:\n${items.map((i) => `- ${i}\n`).join("")}` : `${heading}: none\n`;
-  const added = result.products.filter((p) => p.before === 0);
-  const alreadyThere = result.products.filter((p) => p.before > 0);
+  const added = result.products.filter((p) => p.added > 0 && p.before === 0);
+  const alreadyThere = result.products.filter((p) => p.added > 0 && p.before > 0);
+  const unchanged = [
+    ...result.products.filter((p) => p.added === 0).map((p) => `${p.quantity} × ${p.title}`),
+    ...plan.notes.filter((note) => !result.addedNotes.includes(note)).map((note) => `Note: ${note}`),
+  ];
   return [
-    group("Added to Mijn lijst", added.map((p) => `${p.quantity} × ${p.title}${p.price === null ? "" : ` (${euro(p.price)} each)`}`)),
-    group("Already in Mijn lijst, added on top", alreadyThere.map((p) => `${p.title}: ${p.before} + ${p.quantity} = ${p.before + p.quantity}`)),
-    group("Unmatched, added as notes", plan.notes),
+    group("Added to Mijn lijst", added.map((p) => `${p.added} × ${p.title}${p.price === null ? "" : ` (${euro(p.price)} each)`}`)),
+    group("Already in Mijn lijst, added on top", alreadyThere.map((p) => `${p.title}: ${p.before} + ${p.added} = ${p.before + p.added}`)),
+    unchanged.length ? group("Added on an earlier run, unchanged", unchanged) : "",
+    group("No longer needed, remove these from Mijn lijst by hand", [
+      ...noLongerNeeded.products.map((p) => `${p.quantity} × ${p.title}`),
+      ...noLongerNeeded.notes.map((note) => `Note: ${note}`),
+    ]),
+    group("Unmatched, added as notes", result.addedNotes),
     group("Optional, not added", plan.optional),
     `Have at home: ${plan.haveAtHome.join(", ") || "none"}\n`,
     `Estimated total: ${euro(result.total)}\n`,
     "\nCheck out into the Saturday slot before Friday 12:00.\n",
   ].join("");
+}
+
+/** A report group: "<heading>:" and one "- " line per item, or "<heading>: none". */
+function group(heading: string, items: string[]): string {
+  return items.length ? `${heading}:\n${items.map((i) => `- ${i}\n`).join("")}` : `${heading}: none\n`;
 }
 
 /** Reads the skill's list from a JSON file. */
