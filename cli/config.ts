@@ -5,6 +5,8 @@ import path from "node:path";
 // The local config lives outside the Recipe Vault, in the user's Application Support folder.
 export type Config = {
   vault?: string;
+  /** Adapters replaced by a local-folder fake, by adapter name (see `cli/adapters/`). Used by the tests. */
+  fakes?: { "display-target"?: string };
 };
 
 const configDir = () =>
