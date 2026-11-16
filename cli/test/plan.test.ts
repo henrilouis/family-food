@@ -167,6 +167,31 @@ describe("food plan verdict", () => {
   });
 });
 
+describe("food plan sites", () => {
+  test("tallies each site's Novel Recipe verdicts and counts the Meals the family already took from it", async () => {
+    const { run, vault } = await sandbox();
+    await weekMenu(vault, "2026-10-17", { novel: "[[Lemon Stew]]", novel_source: "https://www.example.com/lemon-stew", novel_verdict: "rejected" }, []);
+    await weekMenu(vault, "2026-10-24", { novel: "[[Bean Stew]]", novel_source: "https://example.com/bean-stew", novel_verdict: "not cooked" }, []);
+    await weekMenu(vault, "2026-10-31", { novel: "[[Bean Stew]]", novel_source: "https://example.com/bean-stew", novel_verdict: "kept" }, []);
+    await weekMenu(vault, "2026-11-07", { novel: "[[Kale Soup]]", novel_source: "https://Cooks.Example.org/kale-soup?ref=x", novel_verdict: "rejected" }, []);
+    await meal(vault, "Bean Stew", "---\nsource: https://example.com/bean-stew\nnovel: false\n---\n# Bean Stew\n");
+    await meal(vault, "Shakshuka", "---\nsource: https://www.example.com/shakshuka\n---\n# Shakshuka\n");
+    await meal(vault, "Tomato Soup", "---\nsource: https://cookieandkate.com/tomato-soup/\n---\n# Tomato Soup\n");
+    await meal(vault, "Grandma's Pie", "---\nsource: Grandma's notebook\n---\n# Grandma's Pie\n");
+
+    const result = await run(["plan", "sites"]);
+
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(0);
+    // The sample vault's Week 2026-11-21 has a Serious Eats Novel Recipe still waiting for its verdict: it counts nowhere yet.
+    expect(JSON.parse(result.stdout)).toEqual([
+      { site: "cookieandkate.com", kept: 0, rejected: 0, notCooked: 0, meals: 1 },
+      { site: "cooks.example.org", kept: 0, rejected: 1, notCooked: 0, meals: 0 },
+      { site: "example.com", kept: 1, rejected: 1, notCooked: 1, meals: 2 },
+    ]);
+  });
+});
+
 describe("food plan write", () => {
   type Day = { dinner: string | null; side?: string; novel?: boolean; double?: string };
   const plan: { weekStart: string; novelSource: string; days: Day[]; staples: string[]; notes: string[] } = {

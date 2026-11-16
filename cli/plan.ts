@@ -118,6 +118,52 @@ export async function planContext(vault: string, now: Date): Promise<PlanContext
   };
 }
 
+/** What the household made of a recipe site so far: the planner prefers sites with keeps and Meals, and skips repeated 👎. */
+export type SiteRecord = {
+  /** The source URL's host without "www.": "cookieandkate.com". */
+  site: string;
+  /** Week Menus whose Novel Recipe came from the site, by `novel_verdict`; a Week Menu without a verdict counts nowhere. */
+  kept: number;
+  rejected: number;
+  notCooked: number;
+  /** Meals (not Novel Recipes still waiting for a verdict) whose `source` is on the site. */
+  meals: number;
+};
+
+/** Every site a Week Menu's `novel_source` or a Meal's `source` points at, by name. Sources that aren't URLs are left out. */
+export async function siteTrackRecord(vault: string): Promise<SiteRecord[]> {
+  const sites = new Map<string, SiteRecord>();
+  const record = (source: unknown) => {
+    const site = siteOf(text(source));
+    if (!site) return null;
+    if (!sites.has(site)) sites.set(site, { site, kept: 0, rejected: 0, notCooked: 0, meals: 0 });
+    return sites.get(site)!;
+  };
+  for (const note of await readWeekMenuNotes(vault)) {
+    const verdict = text(note.properties.novel_verdict)?.toLowerCase();
+    const key = verdict === "kept" ? "kept" : verdict === "rejected" ? "rejected" : verdict === "not cooked" ? "notCooked" : null;
+    if (key) {
+      const site = record(note.properties.novel_source);
+      if (site) site[key]++;
+    }
+  }
+  for (const note of await readNotes(path.join(vault, "Meals"))) {
+    if (note.properties.novel === true) continue;
+    const site = record(note.properties.source);
+    if (site) site.meals++;
+  }
+  return [...sites.values()].sort((a, b) => a.site.localeCompare(b.site));
+}
+
+function siteOf(source: string | null): string | null {
+  if (!source || !/^https?:\/\//i.test(source)) return null;
+  try {
+    return new URL(source).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
 /** A Novel Recipe's verdict, given at the next Planning Session. */
 export const VERDICTS = ["kept", "rejected", "not cooked"] as const;
 export type Verdict = (typeof VERDICTS)[number];

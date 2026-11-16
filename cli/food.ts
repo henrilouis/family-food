@@ -12,7 +12,7 @@ import { readConfig, writeConfig } from "./config.ts";
 import { fetchRecipePage, RecipePageError, RecipePageRefused } from "./recipe-page.ts";
 import { DisplayTargetError } from "./adapters/display-target.ts";
 import { deploy, DeployRefused } from "./deploy.ts";
-import { deleteRecipe, planContext, PlanInputError, recordVerdict, writeWeekMenu, type WeekPlan } from "./plan.ts";
+import { deleteRecipe, planContext, PlanInputError, recordVerdict, siteTrackRecord, writeWeekMenu, type WeekPlan } from "./plan.ts";
 import { preview } from "./preview.ts";
 import { publish, UNREACHABLE_MESSAGE } from "./publish.ts";
 import { VaultError } from "./vault.ts";
@@ -76,6 +76,8 @@ Commands:
                         it was last planned
   plan verdict <week_start> <kept|rejected|not cooked>
                         Record the verdict on that Week Menu's Novel Recipe; kept or rejected clears its novel
+  plan sites            Each recipe site's track record (JSON): its Novel Recipes kept, rejected and not cooked
+                        (from the Week Menus) and the Meals whose source is on it
   plan write <plan.json>
                         Write a Locked Week Menu note from the planning-session skill's plan
                         ({weekStart, novelSource, days: [7 × {dinner, side, novel, double: "cook"|"second"}],
@@ -163,6 +165,10 @@ async function plan(args: string[]): Promise<void> {
     case "context":
       if (rest.length > 0) throw new UsageError(usage);
       process.stdout.write(JSON.stringify(await planContext(await vaultPath(), now()), null, 2) + "\n");
+      return;
+    case "sites":
+      if (rest.length > 0) throw new UsageError(usage);
+      process.stdout.write(JSON.stringify(await siteTrackRecord(await vaultPath()), null, 2) + "\n");
       return;
     case "verdict": {
       const [week, ...verdict] = rest;
