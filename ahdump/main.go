@@ -8,6 +8,9 @@
 //	ahdump -auth <token file> basket
 //	ahdump -auth <token file> basket-add < {"products": [{"id", "quantity"}], "notes": [{"description", "quantity"}]}
 //	ahdump -auth <token file> orders
+//	ahdump -auth <token file> recipes [-size n] [-filter group=value]... [--] [search text]
+//	ahdump -auth <token file> recipe <id>
+//	ahdump -auth <token file> recipe-suggestions <id>
 //	ahdump -auth <token file> history -out <folder>
 //
 // Exit codes: 0 done, 1 failed, 3 not logged in or AH refused the login (run login again),
@@ -39,6 +42,11 @@ commands:
                           ({"products": [{"id", "quantity"}], "notes": [{"description", "quantity"}]}),
                           then print Mijn lijst; quantities add to what is there, nothing is removed
   orders                  print the open orders (checked out or reopened) with their delivery slot as JSON
+  recipes [-size n] [-filter group=value]... [--] [search text]
+                          print Allerhande recipe search results as JSON (anonymous token);
+                          -filter e.g. speciale-wensen=vegetarisch, menugang=hoofdgerecht, seizoen=winter
+  recipe <id>             print one Allerhande recipe as JSON (null when there is none)
+  recipe-suggestions <id> print AH's product for each ingredient of an Allerhande recipe as JSON
   history -out <folder>   pull closed online orders and in-store receipts into a folder`
 
 // errLogin means the user token is missing or AH refused it.
@@ -93,6 +101,12 @@ func main() {
 		if orders, err = ah.openOrders(ctx); err == nil {
 			err = printJSON(json.RawMessage(orders))
 		}
+	case "recipes":
+		err = searchRecipes(ctx, ah, args)
+	case "recipe":
+		err = recipe(ctx, ah, args)
+	case "recipe-suggestions":
+		err = recipeSuggestions(ctx, ah, args)
 	case "history":
 		err = history(ctx, ah, args)
 	default:

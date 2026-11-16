@@ -174,16 +174,6 @@ describe("food recipe fetch", () => {
     expect(result.stderr).toMatch(/paste/i);
   });
 
-  test("leaves Allerhande pages alone for now (exit 2): ah.nl blocks automated reads", async () => {
-    const { run } = await sandbox();
-
-    const result = await run(["recipe", "fetch", "https://www.ah.nl/allerhande/recept/R-R1302900/witte-kool-orzo"]);
-
-    expect(result.code).toBe(2);
-    expect(result.stderr).toContain("Allerhande");
-    expect(result.stderr).toMatch(/paste/i);
-  });
-
   test.each([
     ["a page without a schema.org Recipe", { fixture: "no-recipe.html" }, /no schema\.org Recipe/],
     ["a page the site won't serve", { status: 403, body: "Security Verification" }, /HTTP 403/],
