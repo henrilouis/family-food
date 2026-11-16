@@ -1,0 +1,21 @@
+/* Black and white, portrait, no animation. Variant E of the prototype (branch prototype/kitchen-display) is the visual reference. */
+* { box-sizing: border-box; }
+html { font-size: 3.1vmin; }
+body { margin: 0; background: #fff; color: #000; font-family: Roboto, "Helvetica Neue", Arial, sans-serif; line-height: 1.3; -webkit-font-smoothing: none; }
+b { font-weight: 700; }
+
+.screen { height: 100vh; display: flex; flex-direction: column; padding: .8rem 1rem; overflow: hidden; }
+.fit { flex: 1; overflow: hidden; min-height: 0; }
+.head { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 3px solid #000; padding-bottom: .3rem; margin-bottom: .6rem; font-size: .95em; }
+
+.title { font-size: 2.1em; font-weight: 800; line-height: 1.05; margin: .2rem 0 .4rem; }
+.tag { display: inline-block; border: 2px solid #000; background: #000; color: #fff; padding: 0 .35em; font-size: .8em; font-weight: 700; margin-right: .3em; vertical-align: middle; text-transform: uppercase; letter-spacing: .03em; }
+.with { font-size: 1.1em; margin: .3rem 0; }
+
+.cols2 { columns: 2; column-gap: 1.2rem; margin-top: .4rem; }
+.ings { list-style: none; margin: 0; padding: 0; }
+.ings li { padding: .12em 0; border-bottom: 1px solid #bbb; break-inside: avoid; }
+.grp { font-weight: 700; text-transform: uppercase; font-size: .75em; letter-spacing: .05em; margin: .5em 0 .1em; break-after: avoid; }
+.grp.side { font-size: .95em; border-top: 2px solid #000; padding-top: .2em; }
+
+.message { font-size: 2.2em; font-weight: 800; line-height: 1.15; padding: .5rem; }

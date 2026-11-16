@@ -1,0 +1,65 @@
+#!/usr/bin/env node
+import path from "node:path";
+import { parseArgs } from "node:util";
+import { buildBundle } from "./build-bundle.ts";
+import { readConfig, writeConfig } from "./config.ts";
+import { preview } from "./preview.ts";
+
+const usage = `Usage: food <command>
+
+Commands:
+  config vault <path>   Set the Recipe Vault path in the local config
+  config                Show the local config
+  bundle                Print the display bundle as JSON
+  preview [--port <n>] [--lan]
+                        Serve the Kitchen Display page and a fresh bundle on this Mac
+                        (port 8787 by default; --lan to open it on other devices too)
+`;
+
+class UsageError extends Error {}
+
+const now = () => (process.env.FOOD_NOW ? new Date(process.env.FOOD_NOW) : new Date());
+
+async function vaultPath(): Promise<string> {
+  const { vault } = await readConfig();
+  if (!vault) throw new UsageError("No Recipe Vault set. Run `food config vault <path>` first.");
+  return vault;
+}
+
+async function main(args: string[]): Promise<void> {
+  const [command, ...rest] = args;
+  switch (command) {
+    case "config": {
+      const [key, value] = rest;
+      if (key === undefined) {
+        process.stdout.write(JSON.stringify(await readConfig(), null, 2) + "\n");
+        return;
+      }
+      if (key !== "vault" || !value) throw new UsageError(usage);
+      await writeConfig({ ...(await readConfig()), vault: path.resolve(value) });
+      return;
+    }
+    case "bundle": {
+      const bundle = await buildBundle(await vaultPath(), now());
+      process.stdout.write(JSON.stringify(bundle, null, 2) + "\n");
+      return;
+    }
+    case "preview": {
+      const { values } = parseArgs({
+        args: rest,
+        options: { port: { type: "string", default: "8787" }, lan: { type: "boolean", default: false } },
+      });
+      const port = Number(values.port);
+      if (!Number.isInteger(port) || port < 0) throw new UsageError(`--port must be a port number, not "${values.port}"`);
+      preview({ vault: await vaultPath(), port, lan: values.lan, now });
+      return;
+    }
+    default:
+      throw new UsageError(usage);
+  }
+}
+
+main(process.argv.slice(2)).catch((error) => {
+  process.stderr.write(error instanceof UsageError ? error.message.trimEnd() + "\n" : `${error.stack ?? error}\n`);
+  process.exitCode = 1;
+});
