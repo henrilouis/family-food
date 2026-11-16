@@ -25,11 +25,11 @@ Done when you have a `week_start` whose Week Menu note exists.
 ### 2. List the lines
 
 Run `food basket lines --week <week_start>`. It prints JSON `lines`, one per ingredient line of every Recipe and Side the week buys:
-- `line` (as written), `ingredient` (the name without amount or preparation), `times` (dinners it is bought for: 2 on a Double cook day), `optional`;
+- `line` (as written), `ingredient` (the name its Pinned Product is found by: without amount, preparation or remarks in brackets, and "tinned …" for a line bought in tins), `times` (dinners it is bought for: 2 on a Double cook day), `optional`;
 - `pinned`: the Pinned Product from Products.md (`product` id or null, `title`, `pack`, `kind`), or null;
 - `match`: for a pinned, non-optional line, its entry for `food basket fill`, ready to use. `packFraction: null` means the CLI couldn't compare the amount with the Pack: you work it out.
 
-Also read `<vault>/Staples.md` (Staple products are candidates for matching, and a Staple's product merges with the recipe line into one Basket line) and the Week Menu note's `## Basket` section if there is one: its `Have at home:` line holds the earlier run's answer.
+Also read `<vault>/Staples.md` (Staple products are candidates for matching, and a Staple's product merges with the recipe line into one Basket line) and the Week Menu note's `## Basket` section if there is one: its `Have at home:` line and product lines hold the earlier run's answers.
 
 Done when you have the JSON, the Staples and any earlier `## Basket`.
 
@@ -50,6 +50,7 @@ An entry is `{ recipe, line, product, title, kind, packFraction }`, with `recipe
 Judgement calls:
 - "A or B" ("yellow or white onions", "ghee or grapeseed oil"): match A.
 - An ingredient that is clearly an existing Pinned Product under another name ("yellow or white onions" and the pinned "onion"), or a Staple's product ("plain yoghurt" and the Greek yoghurt Staple): use that product; it is still a new match, so the adult confirms it and it gets pinned under this name too.
+- A pinned match that plainly doesn't fit its line (a different form of the ingredient than the pin's product): list it under New matches as a correction for the adult to confirm.
 - **Running low**: when an adult says an Always in House item is running low ("we're out of cumin"), buy it this run: give its line `kind: "Cupboard Ingredient"` with a product and pack fraction (search for one if its pin has none). Its pin stays Always in House.
 
 Done when every non-optional line has an entry with a kind, and every entry with a product has a title and a pack fraction above 0.
@@ -59,7 +60,7 @@ Done when every non-optional line has an entry with a kind, and every entry with
 One message, before anything is written. Leave out a part that is empty; when every part is empty, say "Every line is pinned and nothing to ask: filling the Basket." and go to step 6.
 
 1. **New matches**: each new match on one line: ingredient (Recipe) → AH title, pack price, estimated packs this week, the kind, and how you found it (bought before / cheapest per kg / nothing at AH, added as a note). Lines that share a product go on one line.
-2. **Cupboard Ingredients this week**, pinned and new, those with a product: "Which of these are at home?" On a run after an earlier one, leave out the ingredients its `Have at home:` line already answered.
+2. **Cupboard Ingredients this week**, pinned and new, those with a product: "Which of these are at home?" When the note already has a `## Basket` section (a run after an earlier one), ask only about Cupboard Ingredients it doesn't cover: leave out those in its product lines (`(id <id>)`) and those its `Have at home:` line names.
 3. **Optional, not added**: each optional line with its Recipe; added only if the adult names it.
 
 End with: "Reply with corrections, what's at home and anything Always in House that's running low, or 'ok'."
@@ -83,9 +84,9 @@ Done when the adult has replied.
 
 ### 5. Apply the reply and pin
 
-- Apply each correction to the entries: another product (search again with `food ah search`), another kind, another amount. A correction the adult calls one-off ("just this week") changes this run only.
-- Write every confirmed new match, with its corrections, to a temp JSON file as a list of `{ ingredient, product, title, pack, kind }` and run `food products pin <file>`. `ingredient` is the line's `ingredient` (for "A or B", the A part); `product` null for nothing at AH or Always in House; `pack` is the size as AH sells it, with its pieces when it holds several ("1 kg ≈ 7 onions", "6 stuks", "400 g"), so later runs can work out the pack fraction themselves. A correction to a Pinned Product goes in the same file: its pin replaces the row. Exit 1 lists the pins it refused; fix them and run it again.
-- Collect the webshop ids of the Cupboard Ingredients at home, plus those an earlier run's `Have at home:` line names (look up their products in the entries). A Cupboard Ingredient without a product that is at home gets `kind: "Always in House"` for this run, so it isn't added as a note.
+- Apply each correction to the entries: another product (search again with `food ah search`), another kind, another amount; and buy the Always in House items named as running low (step 3). A correction the adult calls one-off ("just this week") changes this run only.
+- Write every confirmed new match, with its corrections, to a temp JSON file as a list of `{ ingredient, product, title, pack, kind }` and run `food products pin <file>`. `ingredient` is the line's `ingredient` exactly as listed ("yellow or white onions"), because that is what the next run looks up; `product` null for nothing at AH or Always in House; `pack` is the size as AH sells it, with its pieces when it holds several ("1 kg ≈ 7 onions", "6 stuks", "400 g"), so later runs can work out the pack fraction themselves. A correction to a Pinned Product goes in the same file: its pin replaces the row. Exit 1 lists the pins it refused; fix them and run it again.
+- Collect the webshop ids of the Cupboard Ingredients at home, plus those an earlier `## Basket` section's `Have at home:` line names (look up their products in the entries). A Cupboard Ingredient without a product that is at home gets `kind: "Always in House"` for this run, so it isn't added as a note.
 
 Done when Products.md holds every confirmed new match and you have the `haveAtHome` ids.
 
@@ -106,9 +107,9 @@ After the CLI's output, add in a few lines: how many matches you pinned, any pac
 
 ## Matching order
 
-For a line without a Pinned Product, take the first that gives a sensible product. Translate the ingredient to the Dutch word AH sells it under first (the product as sold, without preparation: "red split lentils" → "rode linzen", "spring onion" → "lente-ui", "coriander" → "koriander").
+Take the first source that gives a sensible product. Before searching, translate the ingredient to the Dutch word AH sells it under (the product as sold, without preparation: "red split lentils" → "rode linzen", "spring onion" → "lente-ui", "coriander" → "koriander").
 
-1. **Pinned Product**: the line's `pinned` (already in `match`).
+1. **Pinned Product**: the line's `pinned`; its `match` is the entry (step 3).
 2. **Previously bought**: `food ah bought "<Dutch>"`, most frequently bought first. Take the first result that is the ingredient itself (not a soup, mix or ready meal of it).
 3. **Lowest unit price**: `food ah search "<Dutch>" --need <amount>`, with the week's total need (the line's amount × `times`, as 400g, 1.5l or a count) when it is in g, ml or pieces. Results come cleaned up (no sponsored, unorderable or multipack products, no pack that wastes more than about twice the need) and cheapest per kg, l or piece first, the AH house brand first on a tie. Take the first that is the ingredient itself.
 4. **Nothing sensible**: `product: null`.

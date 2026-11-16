@@ -120,21 +120,26 @@ describe("food basket lines", () => {
     expect(match("*2* tomatoes, diced")).toBeNull();
   });
 
-  test("counts tins by the size in brackets, and gives optional lines no match", async () => {
+  test("names a line bought in tins as tinned, counts its tins by the size in brackets, and gives optional lines no match", async () => {
     const box = await sandbox();
     const dahl = path.join(box.vault, "Meals", "Dahl.md");
-    await writeFile(dahl, (await readFile(dahl, "utf8")).replace("- salt and pepper\n", "- salt and pepper\n- *2 tins (400 g)* chickpeas, drained\n- *8* tortilla wraps (optional)\n"));
+    const extra = "- *2 tins (400 g)* chickpeas, drained\n- *1 tin (400 g)* tomatoes\n- *8* tortilla wraps (optional)\n";
+    await writeFile(dahl, (await readFile(dahl, "utf8")).replace("- salt and pepper\n", `- salt and pepper\n${extra}`));
     await writeFile(
       path.join(box.vault, "Products.md"),
       "| Ingredient | AH product | Pack | Kind |\n|---|---|---|---|\n" +
-        "| chickpeas | AH Kikkererwten 400 g (4070) | 400 g | Cupboard Ingredient |\n" +
+        "| chickpeas | AH Kikkererwten gedroogd 500 g (4072) | 500 g | Cupboard Ingredient |\n" +
+        "| tinned chickpeas | AH Kikkererwten 400 g (4070) | 400 g | Cupboard Ingredient |\n" +
+        "| tomatoes | AH Trostomaten 500 g (4028) | 500 g ≈ 5 tomatoes | Fresh |\n" +
         "| tortilla wraps | AH Tortilla wraps 8 stuks (4071) | 8 stuks | Fresh |\n",
     );
 
     const all = await lines(box);
 
-    expect(all.find((l) => l.ingredient === "chickpeas")?.match).toMatchObject({ product: 4070, packFraction: 2 });
-    expect(all.find((l) => l.ingredient === "tortilla wraps (optional)")).toMatchObject({ optional: true, match: null });
+    expect(all.find((l) => l.line === "*2 tins (400 g)* chickpeas, drained")).toMatchObject({ ingredient: "tinned chickpeas", match: { product: 4070, packFraction: 2 } });
+    expect(all.find((l) => l.line === "*1 tin (400 g)* tomatoes")).toMatchObject({ ingredient: "tinned tomatoes", pinned: null });
+    expect(all.find((l) => l.line === "*2* tomatoes, diced")?.pinned).toMatchObject({ product: 4028 });
+    expect(all.find((l) => l.line === "*8* tortilla wraps (optional)")).toMatchObject({ optional: true, match: null });
   });
 
   test("a line pinned with food products pin has its Pinned Product on the next run", async () => {
@@ -149,6 +154,21 @@ describe("food basket lines", () => {
 
     expect(unpinned(after)).toBe(unpinned(before) - 1);
     expect(after.find((l) => l.line === "*2* tomatoes, diced")?.match).toMatchObject({ product: 4028, packFraction: 0.333 });
+  });
+
+  test("names the ingredient without remarks in brackets, and finds its pin by that name", async () => {
+    const box = await sandbox();
+    const dahl = path.join(box.vault, "Meals", "Dahl.md");
+    await writeFile(dahl, (await readFile(dahl, "utf8")).replace("- salt and pepper\n", "- salt and pepper\n- *30 g* whole cashew nuts (about 15)\n- *1 tsp* jaggery or sugar (optional, to balance)\n"));
+    await writeFile(
+      path.join(box.vault, "Products.md"),
+      "| Ingredient | AH product | AH id | Pack | Kind |\n|---|---|---|---|---|\n| whole cashew nuts | AH Cashewnoten 200 g | 5021 | 200 g | Cupboard Ingredient |\n",
+    );
+
+    const all = await lines(box);
+
+    expect(all.find((l) => l.line === "*30 g* whole cashew nuts (about 15)")).toMatchObject({ ingredient: "whole cashew nuts", match: { product: 5021, packFraction: 0.15 } });
+    expect(all.find((l) => l.line.startsWith("*1 tsp* jaggery"))).toMatchObject({ ingredient: "jaggery or sugar", optional: true });
   });
 
   test("its matches are what food basket fill takes", async () => {

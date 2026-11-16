@@ -24,7 +24,7 @@ export type BasketLine = {
   recipe: string;
   /** The line as written in the Recipe, italics included. */
   line: string;
-  /** The ingredient without amount or preparation: "onion" for "*1 large* onion, finely chopped". */
+  /** The name its Pinned Product is found by: "onion" for "*1 large* onion (about 150 g), finely chopped", "tinned tomatoes" for "*1 tin (400 g)* tomatoes". */
   ingredient: string;
   times: number;
   optional: boolean;
@@ -32,6 +32,17 @@ export type BasketLine = {
   /** The line's entry for `food basket fill` from its Pinned Product; null when it has none, or the line is optional. */
   match: LineMatch | null;
 };
+
+/**
+ * The name a line's Pinned Product is found by: the ingredient without amount, preparation or remarks in brackets,
+ * and "tinned" in front when the line is bought in tins ("*2 tins (400 g)* tomatoes" → "tinned tomatoes"), so that
+ * tinned and fresh tomatoes can each have their own Pinned Product.
+ */
+function pinName(ingredient: Ingredient): string {
+  const name = ingredientName(ingredient.text).replace(/\s*\([^)]*\)?/g, "").trim();
+  const tinned = /^tins?\b/i.test(ingredient.amount?.unit ?? "") && !/^tinned\b/i.test(name);
+  return tinned ? `tinned ${name}` : name;
+}
 
 /** A `food basket fill` entry whose `packFraction` is null when it couldn't be worked out. */
 type LineMatch = Omit<Match, "packFraction"> & { packFraction?: number | null };
@@ -43,7 +54,7 @@ export async function listBasketLines(vault: string, weekStart: string): Promise
   return {
     weekStart,
     lines: lines.map(({ recipe, ingredient, times, optional }) => {
-      const name = ingredientName(ingredient.text);
+      const name = pinName(ingredient);
       const line = ingredient.amount ? `*${ingredient.amount.text}* ${ingredient.text}` : ingredient.text;
       const pinned = pins.find((pin) => sameIngredient(pin.ingredient, name)) ?? null;
       return { recipe, line, ingredient: name, times, optional, pinned, match: pinned && !optional ? pinnedMatch(recipe, line, ingredient, pinned) : null };
