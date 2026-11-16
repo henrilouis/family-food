@@ -2,6 +2,10 @@
 // Method step. One rule: no case, spacing or remarks in brackets, and a word in the singular is the same word in
 // a simple English plural ("aubergine" and "aubergines", "tomato" and "tomatoes", "berry" and "berries").
 
+/** What kind of ingredient a Pinned Product or Match is: decides the rounding, and whether it is bought at all. */
+export type Kind = "Fresh" | "Cupboard Ingredient" | "Always in House";
+export const KINDS: Kind[] = ["Fresh", "Cupboard Ingredient", "Always in House"];
+
 /** An ingredient line's ingredient without its preparation: "onion, finely chopped" → "onion". */
 export function ingredientName(text: string): string {
   return text.split(",")[0].trim();

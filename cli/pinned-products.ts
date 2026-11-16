@@ -2,7 +2,9 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Amount, Ingredient } from "../bundle/bundle.ts";
 import { measureOf, parseMeasure } from "./amount.ts";
-import { ingredientName, KINDS, weekLines, type Kind, type Match } from "./basket.ts";
+import type { Match } from "./basket/quantities.ts";
+import { ingredientName, KINDS, sameIngredient, type Kind } from "./ingredient.ts";
+import { weekLines } from "./week-lines.ts";
 import { NoteError, readNote, tableRows, type Note } from "./vault.ts";
 
 const PRODUCTS_NOTE = "Products.md";
@@ -107,19 +109,6 @@ export async function readPinnedProducts(vault: string): Promise<PinnedProduct[]
       const title = (row["ah product"] ?? "").replace(/\s*\(\d+\)\s*$/, "");
       return { ingredient: row.ingredient, product: product ? Number(product) : null, title: title || null, pack: row.pack ?? "", kind };
     });
-}
-
-/**
- * Ingredient names compare without case, spacing or remarks in brackets, and singular or plural:
- * "Onions" is "onion", "tomatoes" is "tomato", "pandan (kewra) water" is "pandan water".
- */
-function sameIngredient(a: string, b: string): boolean {
-  const forms = (s: string) => {
-    const name = s.replace(/\s*\([^)]*\)?/g, "").trim().toLowerCase().replace(/\s+/g, " ");
-    return [name, name.replace(/s$/, ""), name.replace(/es$/, "")];
-  };
-  const other = forms(b);
-  return forms(a).some((form) => other.includes(form));
 }
 
 /** A pin `food products pin` can't write; printed without a stack trace. */

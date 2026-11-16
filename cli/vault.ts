@@ -115,6 +115,15 @@ export function tableRows(note: Note, column: string): Record<string, string>[] 
   return rows;
 }
 
+/** The lines under a note's `## <heading>`, up to the next `## ` heading; none when it has no such section. */
+export function sectionLines(note: Note, heading: string): string[] {
+  const lines = note.body.split("\n");
+  const start = lines.findIndex((l) => l.trim().toLowerCase() === `## ${heading.toLowerCase()}`);
+  if (start < 0) return [];
+  const end = lines.findIndex((l, i) => i > start && /^##\s/.test(l));
+  return lines.slice(start + 1, end < 0 ? undefined : end);
+}
+
 /** The note name a cell's wikilink points at: "[[Meals/Dahl#Method|the dahl]]" → "Dahl". */
 export function linkTarget(cell: string): string | null {
   const link = cell.match(/\[\[([^\]|#]+)/);

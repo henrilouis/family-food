@@ -1,7 +1,7 @@
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { addDays, dayLabel, localDate } from "../bundle/dates.ts";
-import { staplesThisWeek } from "./basket.ts";
+import { staplesThisWeek } from "./basket/staples.ts";
 import {
   findRecipeNote,
   linkTarget,
