@@ -162,13 +162,15 @@ describe("food basket lines", () => {
     await writeFile(dahl, (await readFile(dahl, "utf8")).replace("- salt and pepper\n", "- salt and pepper\n- *30 g* whole cashew nuts (about 15)\n- *1 tsp* jaggery or sugar (optional, to balance)\n"));
     await writeFile(
       path.join(box.vault, "Products.md"),
-      "| Ingredient | AH product | AH id | Pack | Kind |\n|---|---|---|---|---|\n| whole cashew nuts | AH Cashewnoten 200 g | 5021 | 200 g | Cupboard Ingredient |\n",
+      "| Ingredient | AH product | AH id | Pack | Kind |\n|---|---|---|---|---|\n| whole cashew nuts | AH Cashewnoten 200 g | 5021 | 200 g | Cupboard Ingredient |\n" +
+        "| pandan (kewra) water | | | | Cupboard Ingredient |\n",
     );
 
     const all = await lines(box);
 
     expect(all.find((l) => l.line === "*30 g* whole cashew nuts (about 15)")).toMatchObject({ ingredient: "whole cashew nuts", match: { product: 5021, packFraction: 0.15 } });
     expect(all.find((l) => l.line.startsWith("*1 tsp* jaggery"))).toMatchObject({ ingredient: "jaggery or sugar", optional: true });
+    expect(all.find((l) => l.line === "*10 ml* pandan (kewra) water")).toMatchObject({ ingredient: "pandan water", pinned: { ingredient: "pandan (kewra) water" } });
   });
 
   test("its matches are what food basket fill takes", async () => {

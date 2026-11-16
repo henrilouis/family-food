@@ -126,10 +126,13 @@ export async function readPinnedProducts(vault: string): Promise<PinnedProduct[]
     });
 }
 
-/** Ingredient names compare without case or spacing, and singular or plural: "Onions" is "onion", "tomatoes" is "tomato". */
+/**
+ * Ingredient names compare without case, spacing or remarks in brackets, and singular or plural:
+ * "Onions" is "onion", "tomatoes" is "tomato", "pandan (kewra) water" is "pandan water".
+ */
 function sameIngredient(a: string, b: string): boolean {
   const forms = (s: string) => {
-    const name = s.trim().toLowerCase().replace(/\s+/g, " ");
+    const name = s.replace(/\s*\([^)]*\)?/g, "").trim().toLowerCase().replace(/\s+/g, " ");
     return [name, name.replace(/s$/, ""), name.replace(/es$/, "")];
   };
   const other = forms(b);
