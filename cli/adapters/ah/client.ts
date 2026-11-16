@@ -65,6 +65,13 @@ export interface AhClient {
 /** A problem with AH that the person running `food` can act on; printed without a stack trace. */
 export class AhError extends Error {}
 
+/** AH doesn't answer, or answers with a server error: its ordering is down (as for 12 days in October 2026). */
+export class AhUnavailableError extends AhError {
+  constructor(message = "AH is not answering. Its online ordering may be down; try again later.") {
+    super(message);
+  }
+}
+
 export class AhLoginError extends AhError {
   constructor(message = "Not logged in to AH. Run `food ah login` first.") {
     super(message);

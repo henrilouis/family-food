@@ -1,11 +1,14 @@
 import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { AhError, AhLoginError, type AhBasket, type AhBasketAdditions, type AhClient, type AhOrder, type AhProduct } from "./client.ts";
+import { AhError, AhLoginError, AhUnavailableError, type AhBasket, type AhBasketAdditions, type AhClient, type AhOrder, type AhProduct } from "./client.ts";
 
 /** The fake's Mijn lijst in `basket.json`: products by webshop id, and free-text notes. */
 type FakeBasket = AhBasketAdditions;
 
-type Mode = { mode: "order placed"; date: string; status?: string } | { mode: "login expired"; loginFixesIt?: boolean };
+type Mode =
+  | { mode: "order placed"; date: string; status?: string }
+  | { mode: "login expired"; loginFixesIt?: boolean }
+  | { mode: "AH down" };
 
 /**
  * The fake AH. Its state is plain JSON in `folder`, so tests can seed it:
@@ -20,6 +23,7 @@ type Mode = { mode: "order placed"; date: string; status?: string } | { mode: "l
  *   is checked out (`status` defaults to SUBMITTED; REOPENED means reopened for changes)
  *   `{ "mode": "login expired" }`: AH refuses the user token; logging in again doesn't help, unless
  *   `"loginFixesIt": true`, when a login ends this mode
+ *   `{ "mode": "AH down" }`: every request fails as when AH's ordering is down
  * - `logins.json`: how many times someone logged in
  * Logging in needs no browser: it writes a made-up token to the token file, as the real login would,
  * and each renewal rotates the made-up refresh token.
@@ -42,10 +46,13 @@ export function fakeAhClient(folder: string, tokenFile: string): AhClient {
 
   const mode = () => state<Mode | null>("mode.json", null);
 
-  /** Fails like AH does in the current mode, for a request with the user token. */
-  const asUser = async () => {
-    if ((await mode())?.mode === "login expired") throw new AhLoginError("AH login expired. Run `food ah login` again.");
+  /** Fails like AH does in the current mode; `user` for a request with the user token. */
+  const request = async (user: boolean) => {
+    const current = (await mode())?.mode;
+    if (current === "AH down") throw new AhUnavailableError("AH is not answering: 503 Service Unavailable (fake)");
+    if (user && current === "login expired") throw new AhLoginError("AH login expired. Run `food ah login` again.");
   };
+  const asUser = () => request(true);
 
   const readBasket = () => state<FakeBasket>("basket.json", { products: [], notes: [] });
 
@@ -66,6 +73,7 @@ export function fakeAhClient(folder: string, tokenFile: string): AhClient {
 
   return {
     async login() {
+      await request(false);
       const current = await mode();
       if (current?.mode === "login expired" && current.loginFixesIt) await rm(path.join(folder, "mode.json"));
       await writeFile(path.join(folder, "logins.json"), String((await state<number>("logins.json", 0)) + 1));
@@ -78,7 +86,7 @@ export function fakeAhClient(folder: string, tokenFile: string): AhClient {
       await writeFile(tokenFile, JSON.stringify({ ...token, refresh_token: `fake-refresh-${renewals + 1}` }));
     },
     async searchProducts(query, token) {
-      if (token === "user") await asUser();
+      await request(token === "user");
       const bought = token === "user" ? await state<number[]>("previously-bought.json", []) : [];
       return (await search(query)).map((p) => ({ ...p, isPreviouslyBought: bought.includes(p.webshopId) }));
     },

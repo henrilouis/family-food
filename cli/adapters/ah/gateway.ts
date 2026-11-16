@@ -6,7 +6,7 @@ import { AhLoginError, type AhBasket, type AhBasketAdditions, type AhClient } fr
 import { fakeAhClient } from "./fake.ts";
 import { previouslyBought, rankProducts, type Amount, type Product } from "./products.ts";
 
-export { AhError, AhLoginError } from "./client.ts";
+export { AhError, AhLoginError, AhUnavailableError } from "./client.ts";
 export { parseAmount, type Amount, type Product } from "./products.ts";
 export type { AhBasketAdditions as BasketAdditions } from "./client.ts";
 

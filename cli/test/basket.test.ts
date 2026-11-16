@@ -708,4 +708,79 @@ describe("food basket fill when AH fails", () => {
     expect(result.stdout).toMatch(/^AH login expired: log in again in the browser window that opens\.\nAdded to Mijn lijst:\n/);
     expect(quantities(await box.basket())).toEqual({ 1: 1, 2: 1 });
   });
+
+  test("with AH ordering down, writes the grouped shopping list without ids into the Basket section", async () => {
+    const box = await pastaWeek();
+    await box.mode({ mode: "AH down" });
+
+    const result = await box.fill(matches);
+
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(2);
+    expect(result.stdout).toBe(
+      [
+        "AH ordering is down, so nothing was added to Mijn lijst. The shopping list is in the Week Menu's ## Basket section:",
+        "Fresh:",
+        "- 1 × AH Spinazie 400 g: spinach",
+        "Cupboard Ingredients:",
+        "- 1 × AH Spaghetti 500 g: spaghetti",
+        "Unmatched:",
+        "- basil leaves (10)",
+        "Optional, not added: none",
+        "Have at home: none",
+        "",
+      ].join("\n"),
+    );
+    expect(await box.basketSection()).toBe(
+      [
+        "## Basket",
+        "Not in Mijn lijst, AH ordering was down:",
+        "Fresh:",
+        "- 1 × AH Spinazie 400 g: spinach",
+        "Cupboard Ingredients:",
+        "- 1 × AH Spaghetti 500 g: spaghetti",
+        "Unmatched:",
+        "- basil leaves (10)",
+        "Have at home: none",
+        "",
+      ].join("\n"),
+    );
+    expect((await box.run(["vault", "check"])).code).toBe(0);
+  });
+
+  test("with AH ordering down on a re-run, keeps what was added before and lists only the difference", async () => {
+    const box = await pastaWeek();
+    await box.fill(matches);
+    await box.changeMenu([["Pasta", "", ""], ["Pasta", "", ""]]);
+    await box.mode({ mode: "AH down" });
+
+    const down = await box.fill(matches);
+
+    expect(down.code).toBe(2);
+    expect(await box.basketSection()).toBe(
+      [
+        "## Basket",
+        "- AH Spaghetti 500 g (id 1) ×1: spaghetti",
+        "- AH Spinazie 400 g (id 2) ×1: spinach",
+        "- Note: basil leaves (10)",
+        "Not in Mijn lijst, AH ordering was down:",
+        "Fresh:",
+        "- 1 × AH Spinazie 400 g: spinach",
+        "Cupboard Ingredients:",
+        "- 1 × AH Spaghetti 500 g: spaghetti",
+        "Unmatched:",
+        "- basil leaves (20)",
+        "Have at home: none",
+        "",
+      ].join("\n"),
+    );
+
+    await rm(path.join(box.ah, "mode.json"));
+    const again = await box.fill(matches);
+
+    expect(again.code).toBe(0);
+    expect((await box.requests()).slice(1)).toEqual([
+      { add: { products: [{ id: 1, quantity: 1 }, { id: 2, quantity: 1 }], notes: [{ description: "basil leaves (20)", quantity: 1 }] } },
+    ]);
+  });
 });

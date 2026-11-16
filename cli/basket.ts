@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { AhError, AhLoginError, type AhGateway } from "./adapters/ah/gateway.ts";
+import { AhError, AhLoginError, AhUnavailableError, type AhGateway } from "./adapters/ah/gateway.ts";
 import {
   findRecipeNote,
   NoteError,
@@ -75,7 +75,12 @@ export type BasketPlan = {
 };
 
 /** The products (with AH's title) and free-text notes an earlier run added for the week, from its `## Basket` section. */
-export type BasketRecord = { products: { id: number; title: string; quantity: number }[]; notes: string[] };
+export type BasketRecord = {
+  products: { id: number; title: string; quantity: number }[];
+  notes: string[];
+  /** The section's product and note lines as written. */
+  lines: string[];
+};
 
 /**
  * Works out what the Locked Week Menu starting on `weekStart` needs from AH: each ingredient line as written,
@@ -247,12 +252,13 @@ function section(body: string, heading: string): string[] {
 
 /** Reads the `## Basket` section's product lines ("- <title> (id <id>) ×<packs>: …") and notes ("- Note: …"). */
 function basketRecord(weekMenu: Note): BasketRecord {
-  const record: BasketRecord = { products: [], notes: [] };
+  const record: BasketRecord = { products: [], notes: [], lines: [] };
   for (const line of section(weekMenu.body, BASKET_HEADING)) {
     const product = line.match(/^- (.+) \(id (\d+)\) ×(\d+): (.*)$/);
     const note = line.match(/^- Note: (.*)$/);
     if (product) record.products.push({ id: Number(product[2]), title: product[1], quantity: Number(product[3]) });
     else if (note) record.notes.push(note[1]);
+    if (product || note) record.lines.push(line);
   }
   return record;
 }
@@ -325,16 +331,27 @@ export type BasketOutcome =
   /** The coming Saturday's order is placed: nothing was written to AH. */
   | { kind: "order placed"; plan: BasketPlan; change: BasketChange; order: { id: number; status: string } }
   /** AH refused the login, also after logging in again: nothing was written to AH. */
-  | { kind: "login failed"; plan: BasketPlan; change: BasketChange; error: string };
+  | { kind: "login failed"; plan: BasketPlan; change: BasketChange; error: string }
+  /** AH didn't answer: nothing was written to AH, the shopping list goes in the `## Basket` section. */
+  | { kind: "AH down"; plan: BasketPlan; change: BasketChange; error: string };
 
 /**
  * Adds to Mijn lijst what the plan needs beyond what an earlier run recorded: products merge into lines already
  * there, unmatched items go in as free-text notes. Never removes anything; what is no longer needed is only listed.
  * Writes nothing once the coming Saturday's order is placed. When AH refuses the login, `log`s a prompt and runs
- * the browser login once; if AH still refuses, writes nothing.
+ * the browser login once; if AH still refuses, writes nothing. Writes nothing either when AH doesn't answer.
  */
 export async function fillBasket(plan: BasketPlan, gateway: AhGateway, log: (line: string) => void): Promise<BasketOutcome> {
   const change = changeSince(plan);
+  try {
+    return await fillOrRelogin(gateway, plan, change, log);
+  } catch (error) {
+    if (!(error instanceof AhUnavailableError)) throw error;
+    return { kind: "AH down", plan, change, error: error.message };
+  }
+}
+
+async function fillOrRelogin(gateway: AhGateway, plan: BasketPlan, change: BasketChange, log: (line: string) => void): Promise<BasketOutcome> {
   try {
     return await fillWith(gateway, plan, change);
   } catch (error) {
@@ -344,7 +361,7 @@ export async function fillBasket(plan: BasketPlan, gateway: AhGateway, log: (lin
   try {
     await gateway.login();
   } catch (error) {
-    if (!(error instanceof AhError)) throw error;
+    if (!(error instanceof AhError) || error instanceof AhUnavailableError) throw error;
     return { kind: "login failed", plan, change, error: error.message };
   }
   try {
@@ -393,11 +410,22 @@ function titleOf(plan: BasketPlan, product: PlannedProduct): string {
 /**
  * Records what Mijn lijst got for the week in the Week Menu's `## Basket` section, replacing an earlier one:
  * "- <AH title> (id <webshop id>) ×<packs>: <ingredients covered>", "- Note: <free-text note>", "Have at home: …".
- * Only once Mijn lijst is filled; otherwise the note is left as it is.
+ * When AH is down, keeps what an earlier run added and adds the shopping list (without ids) of what is still needed.
+ * Otherwise, when nothing was written to AH, the note is left as it is.
  */
 export async function writeBasketSection(outcome: BasketOutcome): Promise<void> {
-  if (outcome.kind !== "filled") return;
   const { plan } = outcome;
+  if (outcome.kind === "AH down") {
+    await replaceSection(plan.file, [
+      `## ${BASKET_HEADING}`,
+      ...plan.recorded.lines,
+      "Not in Mijn lijst, AH ordering was down:",
+      ...shoppingList(plan, outcome.change),
+      `Have at home: ${plan.haveAtHome.join(", ") || "none"}`,
+    ]);
+    return;
+  }
+  if (outcome.kind !== "filled") return;
   await replaceSection(plan.file, [
     `## ${BASKET_HEADING}`,
     ...outcome.products.map((p) => `- ${p.title} (id ${p.id}) ×${p.quantity}: ${p.covers.join(", ")}`),
@@ -455,6 +483,21 @@ export function formatReport(outcome: BasketOutcome): string {
         group("Remove from the order", change.remove.map((p) => `${p.quantity} × ${p.title}`)),
         change.addNotes.length ? group("Unmatched, buy these yourself", change.addNotes) : "",
         change.removeNotes.length ? group("Unmatched, no longer needed", change.removeNotes) : "",
+      ].join("");
+    }
+    case "AH down": {
+      const { plan, change } = outcome;
+      return [
+        "AH ordering is down, so nothing was added to Mijn lijst. The shopping list is in the Week Menu's ## Basket section:\n",
+        shoppingList(plan, change).join("\n") + "\n",
+        change.remove.length || change.removeNotes.length
+          ? group("No longer needed, remove these from Mijn lijst by hand", [
+              ...change.remove.map((p) => `${p.quantity} × ${p.title}`),
+              ...change.removeNotes.map((note) => `Note: ${note}`),
+            ])
+          : "",
+        group("Optional, not added", plan.optional),
+        `Have at home: ${plan.haveAtHome.join(", ") || "none"}\n`,
       ].join("");
     }
     case "login failed":
@@ -523,12 +566,13 @@ function shoppingList(plan: BasketPlan, change: BasketChange): string[] {
     const title = plan.recorded.products.find((r) => r.id === p.id)?.title ?? p.title;
     return title ? `${p.quantity} × ${title}: ${p.covers.join(", ")}` : `${p.quantity} × ${p.covers.join(", ")}`;
   };
-  return [
+  const list = [
     ...groups.map((name) => [name, change.add.filter((p) => p.group === name).map(item)] as const),
     ["Unmatched", change.addNotes] as const,
   ]
     .filter(([, items]) => items.length)
     .flatMap(([name, items]) => [`${name}:`, ...items.map((i) => `- ${i}`)]);
+  return list.length ? list : ["Nothing more to buy."];
 }
 
 /** "Saturday 28 Nov" for a Week Menu's `week_start`. */

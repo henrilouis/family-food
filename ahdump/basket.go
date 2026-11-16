@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 )
@@ -122,10 +124,19 @@ func (a *ah) addToBasket(ctx context.Context, add basketAdditions) (json.RawMess
 	return a.basket(ctx)
 }
 
-// userError turns a 401 into errLogin, so the CLI asks for a new login.
+// userError turns a 401 into errLogin, so the CLI asks for a new login, and AH not answering into errDown.
 func (a *ah) userError(doing string, err error) error {
 	if a.transport.lastStatus() == http.StatusUnauthorized {
 		return fmt.Errorf("%w (%v)", errLogin, err)
+	}
+	return a.downError(doing, err)
+}
+
+// downError turns a server error or no answer at all into errDown, so the CLI falls back to a shopping list.
+func (a *ah) downError(doing string, err error) error {
+	var netErr net.Error
+	if status := a.transport.lastStatus(); status >= 500 || (status == 0 && errors.As(err, &netErr)) {
+		return fmt.Errorf("%s: %w (%v)", doing, errDown, err)
 	}
 	return fmt.Errorf("%s: %w", doing, err)
 }
