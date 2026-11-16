@@ -1,0 +1,103 @@
+// ahdump is the family-food CLI's way into Albert Heijn's unofficial app API,
+// through appie-go. The `food` CLI runs it; each command prints JSON on stdout.
+// It reads and never removes or checks out anything.
+//
+//	ahdump -auth <token file> login
+//	ahdump -auth <token file> refresh
+//	ahdump -auth <token file> search [-token anonymous|user] [-sort RELEVANCE|PURCHASE_FREQUENCY] [--] <query>
+//	ahdump -auth <token file> history -out <folder>
+//
+// Exit codes: 0 done, 1 failed, 3 not logged in or AH refused the login (run login again).
+package main
+
+import (
+	"context"
+	"errors"
+	"flag"
+	"fmt"
+	"log"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"strings"
+)
+
+const usage = `usage: ahdump -auth <token file> <command>
+
+commands:
+  login                   log in to AH in your browser and write the token file
+  refresh                 renew the login now
+  search [-token anonymous|user] [-sort RELEVANCE|PURCHASE_FREQUENCY] [--] <query>
+                          print AH's product search results as JSON
+  history -out <folder>   pull closed online orders and in-store receipts into a folder`
+
+// errLogin means the user token is missing or AH refused it.
+var errLogin = errors.New("not logged in to AH, or AH refused the login: log in again")
+
+const loginExitCode = 3
+
+func main() {
+	log.SetFlags(0)
+	log.SetPrefix("ahdump: ")
+	auth := flag.String("auth", "", "token file (written by login, renewed by every command that needs the login)")
+	flag.Usage = func() { fmt.Fprintln(os.Stderr, usage) }
+	flag.Parse()
+	if *auth == "" || flag.NArg() == 0 {
+		flag.Usage()
+		os.Exit(2)
+	}
+
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+
+	// One ahdump at a time: AH rotates the refresh token on every renewal, so two
+	// processes renewing at once would log the household out.
+	unlock, err := lock(filepath.Join(filepath.Dir(*auth), "ah.lock"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer unlock()
+
+	ah := newAH(*auth)
+	command, args := flag.Arg(0), flag.Args()[1:]
+	switch command {
+	case "login":
+		err = ah.login(ctx)
+	case "refresh":
+		err = ah.refresh(ctx)
+	case "search":
+		err = search(ctx, ah, args)
+	case "history":
+		err = history(ctx, ah, args)
+	default:
+		flag.Usage()
+		os.Exit(2)
+	}
+	if err != nil {
+		log.Print(err)
+		if errors.Is(err, errLogin) {
+			os.Exit(loginExitCode)
+		}
+		os.Exit(1)
+	}
+}
+
+func search(ctx context.Context, ah *ah, args []string) error {
+	fs := flag.NewFlagSet("search", flag.ExitOnError)
+	token := fs.String("token", "anonymous", "anonymous or user")
+	sort := fs.String("sort", "RELEVANCE", "RELEVANCE or PURCHASE_FREQUENCY (needs the user token)")
+	size := fs.Int("size", 30, "number of results")
+	fs.Parse(args)
+	query := strings.Join(fs.Args(), " ")
+	if query == "" {
+		return fmt.Errorf("search: no query\n%s", usage)
+	}
+	if *token != "anonymous" && *token != "user" {
+		return fmt.Errorf("search: -token must be anonymous or user, not %q", *token)
+	}
+	products, err := ah.search(ctx, query, *token == "user", *sort, *size)
+	if err != nil {
+		return err
+	}
+	return printJSON(products)
+}

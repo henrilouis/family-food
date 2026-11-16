@@ -21,11 +21,13 @@ const gitEnv = {
 export type RunResult = { code: number; stdout: string; stderr: string };
 
 /** Adapters with a local-folder fake (see `cli/adapters/`). */
-export type FakeAdapter = "display-target";
+export type FakeAdapter = "display-target" | "ah";
 
 export type Sandbox = {
   /** The temp copy of the sample Recipe Vault. */
   vault: string;
+  /** The local config folder (`FOOD_CONFIG_DIR`). */
+  configDir: string;
   /** With `checkout`: the temp git checkout of this repo the CLI runs from, on a clean `main` pushed to `origin`. */
   checkout: string;
   /** Runs git in `dir` (the checkout by default) and returns its trimmed output. */
@@ -131,5 +133,5 @@ export async function sandbox({ configured = true, checkout: withCheckout = fals
     const result = await run(["config", "vault", vault]);
     if (result.code !== 0) throw new Error(`could not configure the sample vault:\n${result.stderr}`);
   }
-  return { vault, checkout, git, fake, run, bundle, start };
+  return { vault, configDir, checkout, git, fake, run, bundle, start };
 }
