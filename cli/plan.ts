@@ -1,8 +1,8 @@
-import { access } from "node:fs/promises";
+import { access, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { addDays } from "../bundle/kitchen-day.ts";
 import { dayLabel } from "./check.ts";
-import { findRecipeNote, linkTarget, parseWeekMenu, readNotes, readWeekMenuNotes, weekStartOf, type Note } from "./vault.ts";
+import { findRecipeNote, linkTarget, parseWeekMenu, readNotes, readWeekMenuNotes, VaultError, weekStartOf, type Note } from "./vault.ts";
 
 const WEEK_MENUS = "Week menus";
 
@@ -117,7 +117,50 @@ export async function planContext(vault: string, now: Date): Promise<PlanContext
   };
 }
 
-/** The numbered lines under `## Method`. */
+/** A Novel Recipe's verdict, given at the next Planning Session. */
+export const VERDICTS = ["kept", "rejected", "not cooked"] as const;
+export type Verdict = (typeof VERDICTS)[number];
+
+/**
+ * Records the verdict on the Novel Recipe of the Week Menu starting on `weekStart` in its `novel_verdict`.
+ * Once judged (kept or rejected) the Recipe is no longer Novel, so its `novel` is cleared if it is still in the vault.
+ * Returns what changed, for the person.
+ */
+export async function recordVerdict(vault: string, weekStart: string, verdict: string): Promise<string[]> {
+  if (!(VERDICTS as readonly string[]).includes(verdict)) throw new VaultError(`The verdict is kept, rejected or not cooked, not "${verdict}"`);
+  const note = (await readWeekMenuNotes(vault)).find((n) => weekStartOf(n) === weekStart);
+  if (!note) throw new VaultError(`No Week Menu for the week of ${weekStart} in "${WEEK_MENUS}"`);
+  const novel = linkTarget(text(note.properties.novel) ?? "");
+  if (!novel) throw new VaultError(`The Week Menu of ${weekStart} has no Novel Recipe to judge`);
+  await setProperty(note.file, "novel_verdict", verdict);
+  const done = [`${path.relative(vault, note.file)}: novel_verdict: ${verdict}`];
+  const recipe = verdict === "not cooked" ? null : await findRecipeNote(vault, novel);
+  if (recipe) {
+    await setProperty(recipe.file, "novel", "false");
+    done.push(`${path.relative(vault, recipe.file)}: novel: false`);
+  }
+  return done;
+}
+
+/** Sets one property in a note's frontmatter to a one-line `value`, leaving every other line as it was. */
+async function setProperty(file: string, key: string, value: string): Promise<void> {
+  const text = await readFile(file, "utf8");
+  const frontmatter = text.match(/^---\r?\n([\s\S]*?\r?\n)?---(\r?\n|$)/);
+  if (!frontmatter) {
+    await writeFile(file, `---\n${key}: ${value}\n---\n${text}`);
+    return;
+  }
+  const lines = (frontmatter[1] ?? "").split("\n").slice(0, -1);
+  const at = lines.findIndex((line) => line.startsWith(`${key}:`));
+  if (at < 0) lines.push(`${key}: ${value}`);
+  else {
+    // A list or block value continues on the indented lines below its key.
+    let end = at + 1;
+    while (end < lines.length && /^[ \t]+\S|^-\s/.test(lines[end])) end++;
+    lines.splice(at, end - at, `${key}: ${value}`);
+  }
+  await writeFile(file, `---\n${lines.join("\n")}\n---${frontmatter[2]}${text.slice(frontmatter[0].length)}`);
+}
 function methodSteps(note: Note): number {
   let section = "";
   let steps = 0;

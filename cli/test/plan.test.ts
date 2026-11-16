@@ -1,4 +1,4 @@
-import { rm, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
 import { sandbox } from "./harness.ts";
@@ -112,6 +112,62 @@ describe("food plan context", () => {
     expect(meals["Vegetable Biryani"]).toMatchObject({ novel: true, source: "https://www.seriouseats.com/vegetable-biryani-5324853" });
   });
 });
+
+describe("food plan verdict", () => {
+  const weekNote = "Week menus/Week 2026-11-21.md";
+  const biryani = "Meals/Vegetable Biryani.md";
+
+  test("👍 records kept in the Week Menu and clears the Recipe's novel, leaving the rest of both notes as they were", async () => {
+    const { run, vault } = await sandbox();
+    const [weekBefore, biryaniBefore] = await Promise.all([read(vault, weekNote), read(vault, biryani)]);
+
+    const result = await run(["plan", "verdict", "2026-11-21", "kept"]);
+
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(0);
+    expect(await read(vault, weekNote)).toBe(weekBefore.replace("novel_verdict:\n", "novel_verdict: kept\n"));
+    expect(await read(vault, biryani)).toBe(biryaniBefore.replace("novel: true\n", "novel: false\n"));
+    const context = JSON.parse((await run(["plan", "context"], { now: "2026-11-26T20:00" })).stdout);
+    expect(context.review.novelVerdict).toBe("kept");
+    expect(context.meals.find((m: { name: string }) => m.name === "Vegetable Biryani").novel).toBe(false);
+  });
+
+  test("not cooked is recorded and the Recipe stays Novel; a later verdict replaces it", async () => {
+    const { run, vault } = await sandbox();
+    const biryaniBefore = await read(vault, biryani);
+
+    const notCooked = await run(["plan", "verdict", "2026-11-21", "not cooked"]);
+    const afterNotCooked = await read(vault, weekNote);
+    const rejected = await run(["plan", "verdict", "2026-11-21", "rejected"]);
+
+    expect([notCooked.code, rejected.code]).toEqual([0, 0]);
+    expect(afterNotCooked).toContain("novel_verdict: not cooked\n");
+    expect(await read(vault, weekNote)).toContain("novel_verdict: rejected\n");
+    expect(await read(vault, biryani)).toBe(biryaniBefore.replace("novel: true\n", "novel: false\n"));
+    const context = JSON.parse((await run(["plan", "context"], { now: "2026-11-26T20:00" })).stdout);
+    expect(context.rejectedSources).toEqual(["https://www.seriouseats.com/vegetable-biryani-5324853"]);
+  });
+
+  test("refuses a Week Menu without a Novel Recipe and an unknown verdict, writing nothing", async () => {
+    const { run, vault } = await sandbox();
+    const before = await read(vault, "Week menus/Week 2026-11-14.md");
+
+    const noNovel = await run(["plan", "verdict", "2026-11-14", "kept"]);
+    const unknown = await run(["plan", "verdict", "2026-11-21", "meh"]);
+    const noWeek = await run(["plan", "verdict", "2026-11-07", "kept"]);
+
+    expect(noNovel.code).toBe(1);
+    expect(noNovel.stderr).toMatch(/2026-11-14 has no Novel Recipe/);
+    expect(unknown.code).toBe(1);
+    expect(unknown.stderr).toMatch(/kept, rejected or not cooked/);
+    expect(noWeek.code).toBe(1);
+    expect(noWeek.stderr).toMatch(/No Week Menu for the week of 2026-11-07/);
+    expect(await read(vault, "Week menus/Week 2026-11-14.md")).toBe(before);
+    expect(await read(vault, weekNote)).toContain("novel_verdict:\n");
+  });
+});
+
+const read = (vault: string, file: string) => readFile(path.join(vault, file), "utf8");
 
 /** Writes a Week Menu note with these properties and day rows (Day, Dinner, Note). */
 async function weekMenu(vault: string, weekStart: string, properties: Record<string, string>, rows: string[][]) {

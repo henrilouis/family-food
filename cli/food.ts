@@ -11,7 +11,7 @@ import { readConfig, writeConfig } from "./config.ts";
 import { fetchRecipePage, RecipePageError, RecipePageRefused } from "./recipe-page.ts";
 import { DisplayTargetError } from "./adapters/display-target.ts";
 import { deploy, DeployRefused } from "./deploy.ts";
-import { planContext } from "./plan.ts";
+import { planContext, recordVerdict } from "./plan.ts";
 import { preview } from "./preview.ts";
 import { publish, UNREACHABLE_MESSAGE } from "./publish.ts";
 import { VaultError } from "./vault.ts";
@@ -147,6 +147,13 @@ async function plan(args: string[]): Promise<void> {
       if (rest.length > 0) throw new UsageError(usage);
       process.stdout.write(JSON.stringify(await planContext(await vaultPath(), now()), null, 2) + "\n");
       return;
+    case "verdict": {
+      const [week, ...verdict] = rest;
+      if (!week || verdict.length === 0) throw new UsageError(usage);
+      const done = await recordVerdict(await vaultPath(), week, verdict.join(" "));
+      process.stdout.write(done.map((line) => line + "\n").join(""));
+      return;
+    }
     default:
       throw new UsageError(usage);
   }
