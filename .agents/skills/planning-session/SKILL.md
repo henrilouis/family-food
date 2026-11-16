@@ -119,7 +119,7 @@ Only on an explicit "lock it" (or the adult's clear equivalent).
    - Exit 0, "Kitchen Display updated…": done.
    - Exit 0, "Kitchen Display not updated, run `food publish` at home": the Week Menu stands; pass the message on.
    - Exit 1: check errors. Fix those in this week's note or the new Recipe and run it again; report others.
-6. **Hand off**: invoke the `fill-basket` skill for the week of `week.weekStart`. On the Late path, pass on how the household shops.
+6. **Hand off**: invoke the `fill-basket` skill for the week of `week.weekStart`. On the Late path, pass on how the household shops (another AH slot or a store trip). The Week Menu is Locked whatever happens with AH there.
 
 Done when the note is written, the Novel Recipe saved, the Wishes deleted or listed for deletion by hand, the week Published (or the adult told to publish at home), and `fill-basket` started.
 
