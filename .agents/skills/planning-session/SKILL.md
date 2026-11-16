@@ -66,7 +66,7 @@ Done when you can name the week (`week.days[0]` to `week.days[6]`) and whether i
 
 Ask about `review.novel`: 👍 keep, 👎 delete, or not cooked.
 - **👍**: `food plan verdict <review.weekStart> kept`.
-- **👎**: ask to confirm the deletion ("Delete *X* from the Recipe Vault? Its verdict and source stay in the week's note, so it is never suggested again."). Run `food plan verdict <review.weekStart> rejected`, then on a yes `food recipe delete "<X>"`. On a no the Recipe stays as an ordinary Meal.
+- **👎**: ask to confirm the deletion ("Delete *X* from the Recipe Vault? Its verdict and source stay in the week's note, so it is never suggested again."). Run `food plan verdict <review.weekStart> rejected`, then on a yes `food recipe delete "<X>"`. On a no the Recipe stays as an ordinary Meal: the `rejected` verdict already cleared its `novel` (so it never waits as a Novel Recipe again), and its source is in `rejectedSources`, so it is never a candidate again. Plan it like any other Meal.
 - **Not cooked**: `food plan verdict <review.weekStart> "not cooked"`. The Recipe **carries over**: it is this week's Novel Recipe with `review.novelSource`, and there is no candidate search. Offer it; if the adult declines it, ask whether to delete it (`food recipe delete`) or keep it waiting (it stays `novel: true`), then search for candidates.
 
 A **waiting** Novel Recipe is a Meal with `novel: true` other than `review.novel`. At most one waits: when one exists and nothing carries over, offer it as this week's Novel Recipe before searching, and when the adult declines a carry-over while another one waits, the choice is delete or keep this week.
