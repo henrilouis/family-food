@@ -124,6 +124,18 @@ describe("food bundle", () => {
     ]);
   });
 
+  test("carries a dinner written as plain text by its name, without a Recipe: only Free Day is the Free Day", async () => {
+    const { bundle, run } = await sandbox();
+    await run(["plan", "verdict", "2026-11-21", "rejected"]);
+    await run(["recipe", "delete", "Vegetable Biryani"]);
+
+    const { weekMenus, recipes } = await bundle("2026-11-21T10:00");
+
+    expect(weekMenus[0].days[1]).toEqual({ date: "2026-11-22", dinner: null, unlinkedDinner: "Vegetable Biryani", side: null, novel: true, double: null });
+    expect(weekMenus[0].days[6]).toEqual({ date: "2026-11-27", dinner: null, side: null, novel: false, double: null });
+    expect(Object.keys(recipes).sort()).toEqual(["Dahl", "Naan"]);
+  });
+
   test("holds only the Recipes and Sides the Week Menus use", async () => {
     const { bundle, vault } = await sandbox();
     await writeFile(path.join(vault, "Sides/Lime rice.md"), "# Lime rice\n\n## Ingredients\n\n- *200 g* basmati rice\n");

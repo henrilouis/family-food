@@ -16,10 +16,16 @@ function thisWeekLines(bundle: DisplayBundle, now: Date): NoteLine[] {
   if (bundle.weekMenus.length === 0) return [...lines, "", "No Week Menu yet."];
   const title = (key: string | null) => (key ? bundle.recipes[key]?.title ?? key : "");
   const dinner = (day: MenuDay) => {
-    if (!day.dinner) return "Free Day";
-    const marks = [day.novel && "new recipe", day.double === "cook" && "cook double", day.double === "second" && "leftovers"];
+    const name = day.dinner ? title(day.dinner) : day.unlinkedDinner;
+    if (!name) return "Free Day";
+    const marks = [
+      !day.dinner && "deleted",
+      day.novel && "new recipe",
+      day.double === "cook" && "cook double",
+      day.double === "second" && "leftovers",
+    ];
     const notes = marks.filter(Boolean).join(", ");
-    return title(day.dinner) + (day.side && day.double !== "second" ? ` with ${title(day.side)}` : "") + (notes ? ` (${notes})` : "");
+    return name + (day.side && day.double !== "second" ? ` with ${title(day.side)}` : "") + (notes ? ` (${notes})` : "");
   };
   for (const week of bundle.weekMenus) {
     lines.push("", { heading: `Week of ${dayLabel(week.weekStart)}` });

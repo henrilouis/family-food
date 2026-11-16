@@ -10,7 +10,15 @@ export type IngredientList = {
 /** A Method step as plain text and bold ingredient spans ("300g" + "red split lentils"). */
 export type StepText = (string | { amount: string; ingredient: string })[];
 
-export type Screen = WeekScreen | IngredientsScreen | StepScreen | NotesScreen | LeftoversScreen | FreeDayScreen | MessageScreen;
+export type Screen =
+  | WeekScreen
+  | IngredientsScreen
+  | StepScreen
+  | NotesScreen
+  | LeftoversScreen
+  | FreeDayScreen
+  | RecipeGoneScreen
+  | MessageScreen;
 
 /** The Week Menu that covers today, one press back from today's ingredients. */
 export type WeekScreen = {
@@ -25,7 +33,7 @@ export type WeekRow = {
   /** e.g. "Mon 23 Nov" */
   day: string;
   today: boolean;
-  /** The dinner's title; null on the Free Day. */
+  /** The dinner's title, "<name> (deleted)" when its Recipe is gone from the Recipe Vault; null on the Free Day. */
   dinner: string | null;
   side: string | null;
   /** A Double's 2nd day, which eats the day before's dinner. */
@@ -82,6 +90,15 @@ export type LeftoversScreen = {
 export type FreeDayScreen = {
   kind: "free-day";
   day: string;
+  title: string;
+  message: string;
+};
+
+/** Tonight's dinner has no Recipe: a 👎 Novel Recipe deleted from the Recipe Vault. */
+export type RecipeGoneScreen = {
+  kind: "recipe-gone";
+  day: string;
+  /** The dinner as the Week Menu names it. */
   title: string;
   message: string;
 };
@@ -145,6 +162,15 @@ export function buildDeck(bundle: DisplayBundle, now: Date): Deck {
   const day = week?.days.find((d) => d.date === today);
   if (!week || !day) return { screens: [{ kind: "message", day: dayLabel(today), message: "No Week Menu yet" }], current: 0 };
   const weekAtAGlance = weekScreen(bundle, week, today);
+  if (!day.dinner && day.unlinkedDinner) {
+    const gone: RecipeGoneScreen = {
+      kind: "recipe-gone",
+      day: dayLabel(today),
+      title: day.unlinkedDinner,
+      message: "This Recipe isn't in the Recipe Vault any more",
+    };
+    return { screens: [weekAtAGlance, gone], current: 1 };
+  }
   if (!day.dinner) {
     const freeDay: FreeDayScreen = { kind: "free-day", day: dayLabel(today), title: "Free Day", message: "Nothing planned tonight" };
     return { screens: [weekAtAGlance, freeDay], current: 1 };
@@ -179,7 +205,7 @@ function weekRow(bundle: DisplayBundle, day: MenuDay, today: string): WeekRow {
   return {
     day: dayLabel(day.date),
     today: day.date === today,
-    dinner: day.dinner && bundle.recipes[day.dinner].title,
+    dinner: day.dinner ? bundle.recipes[day.dinner].title : day.unlinkedDinner ? `${day.unlinkedDinner} (deleted)` : null,
     side: day.side && bundle.recipes[day.side].title,
     leftovers: day.double === "second",
     tags: [...(day.novel ? ["New"] : []), ...(day.double === "cook" ? ["×2"] : [])],

@@ -33,6 +33,29 @@ describe("days without a dinner to cook", () => {
   });
 });
 
+describe("a dinner whose Recipe is gone from the Recipe Vault", () => {
+  const bundle = withDay("2026-11-22", { dinner: null, unlinkedDinner: "Vegetable Biryani" });
+
+  test("is named as deleted on the week screen", () => {
+    const deck = press(buildDeck(bundle, at("2026-11-22T18:00")), "PageUp");
+    const week = deck.screens[deck.current];
+
+    expect(week.kind === "week" && week.days[1]).toMatchObject({ dinner: "Vegetable Biryani (deleted)", tags: ["New"] });
+  });
+
+  test("shows a short screen saying so instead of a recipe", () => {
+    const deck = buildDeck(bundle, at("2026-11-22T18:00"));
+
+    expect(outline(deck)).toEqual(["week", "Vegetable Biryani"]);
+    expect(deck.screens[deck.current]).toEqual({
+      kind: "recipe-gone",
+      day: "Sun 22 Nov",
+      title: "Vegetable Biryani",
+      message: "This Recipe isn't in the Recipe Vault any more",
+    });
+  });
+});
+
 describe("today's ingredients", () => {
   test("from 03:00 the deck opens on that day's dinner", () => {
     const screen = ingredientsShown(at("2026-11-23T03:00"));
@@ -104,7 +127,7 @@ const outline = (deck: Deck): string[] =>
     if (s.kind === "notes") return `notes: ${s.recipes.map((r) => r.title).join(", ")}`;
     if (s.kind === "week") return "week";
     if (s.kind === "leftovers") return `leftovers: ${s.title}`;
-    if (s.kind === "free-day") return s.title;
+    if (s.kind === "free-day" || s.kind === "recipe-gone") return s.title;
     return s.message;
   });
 

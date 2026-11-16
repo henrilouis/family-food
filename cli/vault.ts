@@ -64,12 +64,16 @@ export async function readNotes(dir: string): Promise<Note[]> {
 export function parseWeekMenu(note: Note): WeekMenu {
   const weekStart = weekStartOf(note);
   const days = dayTable(note).map((row): MenuDay => {
-    const dinner = /^free day$/i.test(row.dinner ?? "") ? null : linkTarget(row.dinner ?? "");
+    const cell = row.dinner ?? "";
+    const freeDay = /^free day$/i.test(cell);
+    const dinner = freeDay ? null : linkTarget(cell);
+    const unlinkedDinner = freeDay || dinner ? "" : plainText(cell);
     const noteCell = row.note ?? "";
     return {
       date: addDays(weekStart, weekdayOffset(note.file, row.day ?? "")),
       dinner,
-      side: dinner ? linkTarget(row.side ?? "") : null,
+      ...(unlinkedDinner ? { unlinkedDinner } : {}),
+      side: dinner || unlinkedDinner ? linkTarget(row.side ?? "") : null,
       novel: /\bnovel\b/i.test(noteCell),
       double: /double:\s*cook/i.test(noteCell) ? "cook" : /double:\s*2nd day/i.test(noteCell) ? "second" : null,
     };

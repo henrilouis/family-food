@@ -81,7 +81,8 @@ Say "plan the week" to the agent: the `planning-session` skill (`.agents/skills/
 food plan context                          # the week to plan, the Novel Recipe to review, the repeat window, the Meals (JSON)
 food plan verdict 2026-11-21 kept          # kept | rejected | "not cooked"
 food plan sites                            # each recipe site's Novel Recipes kept / rejected / not cooked, and its Meals (JSON)
-food recipe delete "Vegetable Biryani"     # after a confirmed 👎; the Week Menus keep its name as plain text
+food recipe delete "Vegetable Biryani"     # after a confirmed 👎; the Week Menus keep its name as plain text,
+                                           # which the Kitchen Display and This week show as "Vegetable Biryani (deleted)"
 food plan write plan.json                  # the Locked Week Menu note
 ```
 

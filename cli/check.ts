@@ -3,7 +3,7 @@ import path from "node:path";
 import type { MenuDay } from "../bundle/bundle.ts";
 import { parseAmount } from "./amount.ts";
 import { isPublished } from "./build-bundle.ts";
-import { findRecipeNote, NoteError, parseRecipe, parseWeekMenu, readNotes, readWeekMenuNotes, RECIPE_FOLDERS, weekStartOf, type Note } from "./vault.ts";
+import { findRecipeNote, linkTarget, NoteError, parseRecipe, parseWeekMenu, readNotes, readWeekMenuNotes, RECIPE_FOLDERS, weekStartOf, type Note } from "./vault.ts";
 
 /** A format problem in one Recipe Vault note. `file` is relative to the vault, e.g. "Meals/Dahl.md". */
 export type Problem = { file: string; message: string };
@@ -21,7 +21,9 @@ export async function checkVault(vault: string, { publishing }: { publishing?: D
   const error = (note: Note, message: string) => check.errors.push({ file: relative(note), message });
   const warning = (note: Note, message: string) => check.warnings.push({ file: relative(note), message });
 
-  const weekMenus = (await readWeekMenuNotes(vault)).filter((note) => !publishing || isPublished(weekStartOf(note), publishing));
+  const allWeekMenus = await readWeekMenuNotes(vault);
+  const weekMenus = allWeekMenus.filter((note) => !publishing || isPublished(weekStartOf(note), publishing));
+  const judgedNovels = new Set(allWeekMenus.flatMap(judgedNovel));
   const recipes = new Map<string, Note>();
   for (const note of weekMenus.sort((a, b) => a.file.localeCompare(b.file))) {
     let days: MenuDay[];
@@ -33,6 +35,10 @@ export async function checkVault(vault: string, { publishing }: { publishing?: D
       continue;
     }
     for (const day of days) {
+      const unlinked = day.unlinkedDinner;
+      if (unlinked && !judgedNovels.has(unlinked)) {
+        error(note, `${dayLabel(day.date)} has the dinner "${unlinked}" as plain text: link it ([[${unlinked}]]) or write Free Day`);
+      }
       for (const name of [day.dinner, day.side]) {
         if (name === null) continue;
         const recipe = await findRecipeNote(vault, name);
@@ -61,6 +67,17 @@ export async function checkVault(vault: string, { publishing }: { publishing?: D
     }
   }
   return check;
+}
+
+/**
+ * The Novel Recipe a Week Menu's verdict judged: a 👎 one, or one not cooked and then deleted instead of kept waiting.
+ * `food recipe delete` leaves its name in the Week Menus as plain text.
+ */
+function judgedNovel(note: Note): string[] {
+  const { novel, novel_verdict: verdict } = note.properties;
+  if (!["rejected", "not cooked"].includes(String(verdict ?? "").trim().toLowerCase())) return [];
+  const name = linkTarget(String(novel ?? ""));
+  return name ? [name] : [];
 }
 
 const MEAL_PROPERTIES = ["serves", "active_minutes", "total_minutes", "cuisine", "base", "double", "source", "sides", "novel", "reviewed"];

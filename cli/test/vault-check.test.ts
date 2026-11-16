@@ -26,6 +26,19 @@ describe("food vault check", () => {
       expect(result.stdout).toContain("1 error,");
     });
 
+    test("a Week Menu dinner written as plain text, unless it is a 👎 Novel Recipe deleted from the vault", async () => {
+      const { run, vault } = await sandbox();
+      await edit(vault, "Week menus/Week 2026-11-21.md", "| [[Dahl]]              |          |                 |", "| Dahl                  |          |                 |");
+      await run(["plan", "verdict", "2026-11-21", "rejected"]);
+      await run(["recipe", "delete", "Vegetable Biryani"]);
+
+      const result = await run(["vault", "check"]);
+
+      expect(result.code).toBe(1);
+      expect(result.stdout).toContain('error    Week menus/Week 2026-11-21.md: Sat 21 Nov has the dinner "Dahl" as plain text: link it ([[Dahl]]) or write Free Day\n');
+      expect(result.stdout).toContain("1 error,");
+    });
+
     test("a Week Menu that links a Side that doesn't exist", async () => {
       const { run, vault } = await sandbox();
       await edit(vault, "Week menus/Week 2026-11-14.md", "| [[Dahl]]              | [[Naan]] | Double: cook    |\n| Tue", "| [[Dahl]]              | [[Roti]] | Double: cook    |\n| Tue");

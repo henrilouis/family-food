@@ -151,6 +151,19 @@ describe("food publish and the This week note", () => {
     );
   });
 
+  test("names a 👎 Novel Recipe deleted from the vault as deleted", async () => {
+    const { run, fake } = await sandbox();
+    await fake("display-target");
+    const notes = await fake("apple-notes");
+    await run(["plan", "verdict", "2026-11-21", "rejected"]);
+    await run(["recipe", "delete", "Vegetable Biryani"]);
+
+    const result = await run(["publish"], { now: "2026-11-22T10:00" });
+
+    expect(result.code).toBe(0);
+    expect(await thisWeek(notes)).toContain("Sun 22 Nov: Vegetable Biryani (deleted, new recipe)\n");
+  });
+
   test("says when there is no Week Menu yet", async () => {
     const { run, fake } = await sandbox();
     await fake("display-target");

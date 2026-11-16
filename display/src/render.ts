@@ -64,6 +64,8 @@ export function renderScreen(screen: Screen): string {
       return week(screen);
     case "message":
       return head(`${esc(screen.day)} · Today`) + `<div class="fit message">${esc(screen.message)}</div>`;
+    case "recipe-gone":
+      return head(`${esc(screen.day)} · Today`) + `<div class="fit"><div class="message">${esc(screen.title)}</div><p class="lead">${esc(screen.message)}.</p></div>`;
     case "free-day":
       return (
         head(`${esc(screen.day)} · Today`) +
