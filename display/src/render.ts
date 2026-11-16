@@ -32,13 +32,14 @@ function step(screen: StepScreen): string {
 }
 
 function notes(screen: NotesScreen): string {
-  const sections = screen.recipes.map(
+  const withNotes = screen.recipes.filter((r) => r.notes.length || r.source);
+  const sections = withNotes.map(
     (r) =>
       (screen.recipes.length > 1 ? `<div class="grp">${esc(r.title)}</div>` : "") +
-      (r.notes.length ? r.notes.map((n) => `<p>${esc(n)}</p>`).join("") : `<p class="muted">No notes.</p>`) +
+      r.notes.map((n) => `<p>${esc(n)}</p>`).join("") +
       (r.source ? `<p class="source">Source: ${esc(r.source)}</p>` : ""),
   );
-  return head(esc(screen.recipes[0].title), "Notes") + `<div class="fit notes">${sections.join("")}</div>`;
+  return head(esc(screen.recipes[0].title), "Notes") + `<div class="fit notes">${sections.join("") || `<p class="muted">No notes.</p>`}</div>`;
 }
 
 export function renderScreen(screen: Screen): string {
