@@ -2,6 +2,7 @@
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { AhError, ahGateway, parseAmount } from "./adapters/ah/gateway.ts";
+import { AppleNotesError, familyNotes, FOOD_WISHES, type Deletion } from "./adapters/apple-notes/notes.ts";
 import { buildBundle } from "./build-bundle.ts";
 import { checkVault, formatCheck } from "./check.ts";
 import { readConfig, writeConfig } from "./config.ts";
@@ -95,9 +96,46 @@ async function main(args: string[]): Promise<void> {
       return;
     case "ah":
       return ah(rest);
+    case "notes":
+      return notes(rest);
     default:
       throw new UsageError(usage);
   }
+}
+
+async function notes(args: string[]): Promise<void> {
+  const [note, ...rest] = args;
+  const family = familyNotes(await readConfig());
+  const { values, positionals } = parseArgs({ args: rest, allowPositionals: true, options: { json: { type: "boolean", default: false } } });
+  const [action, ...items] = positionals;
+  const report = (name: string, deletion: Deletion) => {
+    process.stdout.write(values.json ? JSON.stringify(deletion, null, 2) + "\n" : formatDeletion(name, deletion));
+    // 2: Notes wouldn't take the change; the skills fall back to reading only and list `deleteByHand` for an adult.
+    if (deletion.deleteByHand.length > 0) process.exitCode = 2;
+  };
+  switch (note) {
+    case "wishes": {
+      if (action === "delete" && items.length > 0) return report(FOOD_WISHES, await family.deleteWishes(items));
+      if (action !== undefined) throw new UsageError(usage);
+      const wishes = await family.wishes();
+      process.stdout.write(values.json ? JSON.stringify(wishes, null, 2) + "\n" : wishes.map((wish) => wish + "\n").join(""));
+      return;
+    }
+    default:
+      throw new UsageError(usage);
+  }
+}
+
+function formatDeletion(note: string, { deleted, notFound, deleteByHand, error }: Deletion): string {
+  const lines = [
+    ...deleted.map((item) => `Deleted from ${note}: ${item}`),
+    ...notFound.map((item) => `Not in ${note}: ${item}`),
+  ];
+  if (deleteByHand.length > 0) {
+    lines.push(`Could not change the Apple Note "${note}": ${error}`, `Please delete these from "${note}" by hand:`);
+    lines.push(...deleteByHand.map((item) => `- ${item.replace(/\n/g, "\n  ")}`));
+  }
+  return lines.map((line) => line + "\n").join("");
 }
 
 async function ah(args: string[]): Promise<void> {
@@ -138,7 +176,7 @@ async function ah(args: string[]): Promise<void> {
 }
 
 main(process.argv.slice(2)).catch((error) => {
-  const expected = [UsageError, VaultError, DeployRefused, DisplayTargetError, AhError].some((type) => error instanceof type);
+  const expected = [UsageError, VaultError, DeployRefused, DisplayTargetError, AhError, AppleNotesError].some((type) => error instanceof type);
   process.stderr.write(expected ? error.message.trimEnd() + "\n" : `${error.stack ?? error}\n`);
   process.exitCode = 1;
 });

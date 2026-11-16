@@ -21,7 +21,7 @@ const gitEnv = {
 export type RunResult = { code: number; stdout: string; stderr: string };
 
 /** Adapters with a local-folder fake (see `cli/adapters/`). */
-export type FakeAdapter = "display-target" | "ah";
+export type FakeAdapter = "display-target" | "ah" | "apple-notes";
 
 export type Sandbox = {
   /** The temp copy of the sample Recipe Vault. */
