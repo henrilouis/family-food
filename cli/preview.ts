@@ -2,24 +2,10 @@ import http from "node:http";
 import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { build } from "esbuild";
 import { BUNDLE_FILE, VERSION_FILE } from "../bundle/bundle.ts";
 import { buildBundle } from "./build-bundle.ts";
 import { bundleVersion } from "./bundle-files.ts";
-
-const display = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../display");
-
-async function buildPageScript(): Promise<string> {
-  const result = await build({
-    entryPoints: [path.join(display, "src/main.ts")],
-    bundle: true,
-    write: false,
-    format: "iife",
-    target: "es2020",
-  });
-  return result.outputFiles[0].text;
-}
+import { buildPageScript, displayDir as display } from "./page.ts";
 
 type Options = { vault: string; port: number; lan: boolean; now: () => Date };
 type Route = { contentType: string; body: () => Promise<string> };
