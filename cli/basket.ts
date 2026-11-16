@@ -356,8 +356,8 @@ export type BasketOutcome =
    * `total` is Mijn lijst's estimated total after adding, from the prices AH gives.
    */
   | { kind: "filled"; plan: BasketPlan; change: BasketChange; products: FilledProduct[]; total: number }
-  /** The coming Saturday's order is placed: nothing was written to AH. */
-  | { kind: "order placed"; plan: BasketPlan; change: BasketChange; order: { id: number; status: string } }
+  /** An order delivering in the Week Menu's week is placed: nothing was written to AH. */
+  | { kind: "order placed"; plan: BasketPlan; change: BasketChange; order: { id: number; status: string; date: string } }
   /** AH refused the login, also after logging in again: nothing was written to AH. */
   | { kind: "login failed"; plan: BasketPlan; change: BasketChange; error: string }
   /** AH didn't answer: nothing was written to AH, the shopping list goes in the `## Basket` section. */
@@ -366,7 +366,7 @@ export type BasketOutcome =
 /**
  * Adds to Mijn lijst what the plan needs beyond what an earlier run recorded: products merge into lines already
  * there, unmatched items go in as free-text notes. Never removes anything; what is no longer needed is only listed.
- * Writes nothing once the coming Saturday's order is placed. When AH refuses the login, `log`s a prompt and runs
+ * Writes nothing once an order delivering in the Week Menu's week is placed. When AH refuses the login, `log`s a prompt and runs
  * the browser login once; if AH still refuses, writes nothing. Writes nothing either when AH doesn't answer.
  */
 export async function fillBasket(plan: BasketPlan, gateway: AhGateway, log: (line: string) => void): Promise<BasketOutcome> {
@@ -498,8 +498,8 @@ export function formatReport(outcome: BasketOutcome): string {
     case "filled":
       return formatFilled(outcome);
     case "order placed": {
-      const { plan, change } = outcome;
-      const placed = `The order for ${saturday(plan.weekStart)} is already placed`;
+      const { plan, change, order } = outcome;
+      const placed = `The order for ${longDay(order.date)} is already placed`;
       if (!filledBefore(plan)) {
         return [`${placed}, so nothing was added to Mijn lijst.\n`, formatLinks(change), formatShoppingList(plan, change, "Shopping list")].join("");
       }
@@ -598,10 +598,10 @@ function shoppingList(plan: BasketPlan, change: BasketChange): string[] {
   return list.length ? list : ["Nothing more to buy."];
 }
 
-/** "Saturday 28 Nov" for a Week Menu's `week_start`. */
-function saturday(weekStart: string): string {
+/** "Saturday 28 Nov" for "2026-11-28". */
+function longDay(date: string): string {
   const options = { weekday: "long", day: "numeric", month: "short", timeZone: "UTC" } as const;
-  return new Date(`${weekStart}T00:00Z`).toLocaleDateString("en-GB", options);
+  return new Date(`${date}T00:00Z`).toLocaleDateString("en-GB", options);
 }
 
 function euro(amount: number): string {

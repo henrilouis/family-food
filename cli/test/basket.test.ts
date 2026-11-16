@@ -709,7 +709,20 @@ describe("food basket fill once the order is placed", () => {
     expect(await box.requests()).toHaveLength(1);
   });
 
-  test("fills Mijn lijst as usual when the placed order is for another Saturday", async () => {
+  test("also writes nothing to AH when the placed order delivers on another day of the Week Menu's week", async () => {
+    const box = await basketBox([{ webshopId: 1, title: "AH Spaghetti 500 g", priceBeforeBonus: 1.29 }]);
+    await box.recipe("Pasta", ["*500g* spaghetti"]);
+    await box.weekMenu([["Free Day", "", ""], ["Free Day", "", ""], ["Pasta", "", ""]]);
+    await box.mode({ mode: "order placed", date: "2026-11-30" });
+
+    const result = await box.fill([{ recipe: "Pasta", line: "500g spaghetti", product: 1, packFraction: 1, kind: "Cupboard Ingredient" }]);
+
+    expect(result.code).toBe(2);
+    expect(await box.requests()).toEqual([]);
+    expect(result.stdout).toMatch(/^The order for Monday 30 Nov is already placed, so nothing was added to Mijn lijst\.\n/);
+  });
+
+  test("fills Mijn lijst as usual when the placed order is for another week", async () => {
     const box = await basketBox([{ webshopId: 1, title: "AH Spaghetti 500 g", priceBeforeBonus: 1.29 }]);
     await box.recipe("Pasta", ["*500g* spaghetti"]);
     await box.weekMenu([["Pasta", "", ""]]);

@@ -1,5 +1,6 @@
 import { access, chmod, mkdir } from "node:fs/promises";
 import path from "node:path";
+import { addDays } from "../../../bundle/kitchen-day.ts";
 import { configDir, type Config } from "../../config.ts";
 import { ahdumpClient } from "./ahdump.ts";
 import type { RecipePage } from "../../recipe-page.ts";
@@ -55,10 +56,11 @@ export interface AhGateway {
    */
   addToBasket(additions: AhBasketAdditions): Promise<Basket>;
   /**
-   * The order for delivery on `date` (YYYY-MM-DD) once it is placed: checked out, or reopened for changes.
-   * Null while that Saturday's Basket is still only Mijn lijst. Needs the login.
+   * A placed order (checked out, or reopened for changes) delivering in the Week Menu's week: from its Saturday
+   * `weekStart` (YYYY-MM-DD) to the Friday after, so also another slot booked on the Late path. `date` is its delivery day.
+   * Null while the week's Basket is still only Mijn lijst. Needs the login.
    */
-  placedOrder(date: string): Promise<{ id: number; status: string } | null>;
+  placedOrder(weekStart: string): Promise<{ id: number; status: string; date: string } | null>;
   /** Allerhande's vegetarian main courses that match, most relevant first, without advertorials and baby food. */
   searchAllerhande(search: AllerhandeSearch): Promise<AllerhandeCandidate[]>;
   /** One Allerhande recipe by its number, in the shape `food recipe fetch` gives any recipe page. */
@@ -101,10 +103,12 @@ export function ahGateway(config: Config): AhGateway {
       if (!(await loggedIn())) throw new AhLoginError();
       return basket(await client.addToBasket(additions));
     },
-    async placedOrder(date) {
+    async placedOrder(weekStart) {
       if (!(await loggedIn())) throw new AhLoginError();
-      const order = (await client.openOrders()).find((o) => o.delivery?.slot?.date === date);
-      return order ? { id: order.orderId, status: order.delivery?.status ?? "OPEN" } : null;
+      const friday = addDays(weekStart, 6);
+      const inWeek = (date: string | undefined): date is string => !!date && date >= weekStart && date <= friday;
+      const order = (await client.openOrders()).find((o) => inWeek(o.delivery?.slot?.date));
+      return order ? { id: order.orderId, status: order.delivery?.status ?? "OPEN", date: order.delivery!.slot!.date! } : null;
     },
     async searchAllerhande({ text, season, cuisine, size = 20 }) {
       const filters = { ...VEGETARIAN_MAINS, ...(season ? { seizoen: [season] } : {}), ...(cuisine ? { keuken: [cuisine] } : {}) };
