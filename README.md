@@ -9,7 +9,7 @@ The household's dinner planning, Albert Heijn Basket and Kitchen Display. See `G
 - `bundle/`: the display bundle's shared type definition, used by both
 - `ahdump/`: the AH client, a Go tool on appie-go that the CLI runs (see `ahdump/README.md`)
 - `pi/`: the Kitchen Display Pi's setup script and Caddy config, run and uploaded by `food deploy`
-- `samples/`: a small sample Recipe Vault and the sample bundles built from it, used by the tests
+- `samples/`: a small sample Recipe Vault, the sample bundles built from it, and sample fill-basket matches (`samples/basket/`), used by the tests
 - `docs/meal-properties.md`: the Meal properties and the fixed `cuisine` and `base` lists, which `food vault check` reads
 
 ## Setup
@@ -28,7 +28,11 @@ npm run build:ahdump                      # needs Go
 food ah login                             # once, in your browser
 food ah search kikkererwten --need 400g   # cleaned up, cheapest per kg first
 food ah bought melk                       # what the household bought before
+food ah basket                            # Mijn lijst as JSON
+food basket fill --week 2026-11-21 matches.json   # see samples/basket/ for the matches format
 ```
+
+`food basket fill` is what the fill-basket skill runs once the matches are confirmed. It reads the Week Menu, `Staples.md` and the Recipes, adds to Mijn lijst (never removes), writes the Week Menu's `## Basket` section and prints a report.
 
 The AH token is kept in the local config folder with mode 600, never in the Recipe Vault. The tests use a fake AH; `ahdump/README.md` lists the checks to do by hand against the live API.
 

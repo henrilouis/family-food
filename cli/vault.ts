@@ -88,10 +88,17 @@ function weekdayOffset(file: string, day: string): number {
 
 /** The rows of the note's day table (Day | Dinner | Side | Note), keyed by lower-cased column name. */
 function dayTable(note: Note): Record<string, string>[] {
+  const rows = tableRows(note, "dinner");
+  if (!rows) throw new NoteError(note.file, "no day table with a Dinner column");
+  return rows;
+}
+
+/** The rows of the note's first table with a `column` column, keyed by lower-cased column name; null if there is none. */
+export function tableRows(note: Note, column: string): Record<string, string>[] | null {
   const lines = note.body.split("\n").map((l) => l.trim());
   const cells = (line: string) => line.replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
-  const headerAt = lines.findIndex((l) => l.startsWith("|") && /\bdinner\b/i.test(l));
-  if (headerAt < 0) throw new NoteError(note.file, "no day table with a Dinner column");
+  const headerAt = lines.findIndex((l) => l.startsWith("|") && new RegExp(`\\b${column}\\b`, "i").test(l));
+  if (headerAt < 0) return null;
   const header = cells(lines[headerAt]).map((c) => c.toLowerCase());
   const rows: Record<string, string>[] = [];
   for (const line of lines.slice(headerAt + 1)) {
