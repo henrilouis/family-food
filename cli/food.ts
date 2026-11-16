@@ -8,6 +8,7 @@ import { readConfig, writeConfig } from "./config.ts";
 import { DisplayTargetError } from "./adapters/display-target.ts";
 import { deploy, DeployRefused } from "./deploy.ts";
 import { preview } from "./preview.ts";
+import { publish, UNREACHABLE_MESSAGE } from "./publish.ts";
 import { VaultError } from "./vault.ts";
 
 const usage = `Usage: food <command>
@@ -23,6 +24,9 @@ Commands:
   preview [--port <n>] [--lan]
                         Serve the Kitchen Display page and a fresh bundle on this Mac
                         (port 8787 by default; --lan to open it on other devices too)
+  publish               Send the current and upcoming Week Menus to the Kitchen Display Pi:
+                        vault check (errors stop it, exit 1), bundle, new release, keep the last 3.
+                        Prints "${UNREACHABLE_MESSAGE}" and exits 0 when the Pi is out of reach
   ah login              Log in to Albert Heijn in your browser (once; the token stays on this Mac)
   ah refresh            Renew the AH login now (says so when you need to log in again)
   ah search <query> [--need <amount>]
@@ -85,6 +89,9 @@ async function main(args: string[]): Promise<void> {
     }
     case "deploy":
       await deploy((line) => line && process.stdout.write(line + "\n"));
+      return;
+    case "publish":
+      if (!(await publish(await vaultPath(), now(), (line) => process.stdout.write(line + "\n")))) process.exitCode = 1;
       return;
     case "ah":
       return ah(rest);

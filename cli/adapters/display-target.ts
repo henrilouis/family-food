@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { readConfig } from "../config.ts";
 
@@ -15,7 +15,15 @@ export interface DisplayTarget {
   setup(dir: string): Promise<string>;
   /** Makes the web root's `page/` an exact copy of `dir`. */
   uploadPage(dir: string): Promise<void>;
+  /**
+   * Uploads `dir` (the bundle and its version file) as `releases/<id>/`, then points `current` at it
+   * in one step and removes all but the newest `KEEP_RELEASES` releases. Release ids sort by age.
+   */
+  publishRelease(dir: string, id: string): Promise<void>;
 }
+
+/** How many releases the Pi keeps, the one `current` points at included. */
+export const KEEP_RELEASES = 3;
 
 export const SSH_HOST = "kitchen";
 export const WEB_ROOT = "/srv/kitchen";
@@ -51,6 +59,20 @@ class SshDisplayTarget implements DisplayTarget {
 
   async uploadPage(dir: string): Promise<void> {
     await this.rsync(dir, `${WEB_ROOT}/page/`);
+  }
+
+  async publishRelease(dir: string, id: string): Promise<void> {
+    // The first connection fails cleanly (exit 255) when the Pi is off, before anything is uploaded.
+    await this.exec([...ssh, this.host, `mkdir -p ${WEB_ROOT}/releases/${id}`]);
+    await this.rsync(dir, `${WEB_ROOT}/releases/${id}/`);
+    const switchAndPrune = [
+      `cd ${WEB_ROOT}`,
+      `ln -sfn releases/${id} current.new`,
+      `mv -T current.new current`,
+      `ls -1 releases | sort -r | tail -n +${KEEP_RELEASES + 1} | while read -r old; do` +
+        ` [ "releases/$old" = "$(readlink current)" ] || rm -rf "releases/$old"; done`,
+    ].join(" && ");
+    await this.exec([...ssh, this.host, switchAndPrune]);
   }
 
   private rsync(dir: string, remote: string): Promise<Buffer> {
@@ -107,6 +129,19 @@ class FakeDisplayTarget implements DisplayTarget {
     await this.state();
     await rm(path.join(this.root, "page"), { recursive: true, force: true });
     await cp(dir, path.join(this.root, "page"), { recursive: true });
+  }
+
+  async publishRelease(dir: string, id: string): Promise<void> {
+    await this.state();
+    const releases = path.join(this.root, "releases");
+    await rm(path.join(releases, id), { recursive: true, force: true });
+    await cp(dir, path.join(releases, id), { recursive: true });
+    const next = path.join(this.root, "current.new");
+    await rm(next, { force: true });
+    await symlink(`releases/${id}`, next);
+    await rename(next, path.join(this.root, "current"));
+    const old = (await readdir(releases)).sort().reverse().slice(KEEP_RELEASES);
+    for (const name of old) if (name !== id) await rm(path.join(releases, name), { recursive: true, force: true });
   }
 
   private async state(): Promise<FakeState> {
