@@ -2,6 +2,7 @@
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { buildBundle } from "./build-bundle.ts";
+import { checkVault, formatCheck } from "./check.ts";
 import { readConfig, writeConfig } from "./config.ts";
 import { preview } from "./preview.ts";
 import { VaultError } from "./vault.ts";
@@ -38,6 +39,14 @@ async function main(args: string[]): Promise<void> {
       }
       if (key !== "vault" || !value) throw new UsageError(usage);
       await writeConfig({ ...(await readConfig()), vault: path.resolve(value) });
+      return;
+    }
+    case "vault": {
+      const [sub] = rest;
+      if (sub !== "check") throw new UsageError(usage);
+      const check = await checkVault(await vaultPath());
+      process.stdout.write(formatCheck(check));
+      if (check.errors.length > 0) process.exitCode = 1;
       return;
     }
     case "bundle": {
