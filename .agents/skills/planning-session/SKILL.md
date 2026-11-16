@@ -60,7 +60,7 @@ Done when you can name the week (`week.days[0]` to `week.days[6]`) and whether i
 
 ### 2. Review the last Novel Recipe
 
-`review` is the most recent Week Menu before this week. Skip this step when `review` or `review.novel` is null, or when `review.novelVerdict` is `kept` or `rejected`. When it is already `not cooked` (an interrupted session), go straight to the carry-over below.
+`review` is the most recent Week Menu before this week. Skip this step when `review` or `review.novel` is null, or when `review.novelVerdict` is `kept` or `rejected`. When it is already `not cooked` (an interrupted session), go straight to the carry-over below. When `review.novelInVault` is false, the Recipe is gone: record the verdict only.
 
 Ask about `review.novel`: 👍 keep, 👎 delete, or not cooked.
 - **👍**: `food plan verdict <review.weekStart> kept`.
