@@ -13,6 +13,7 @@ import { fetchRecipePage, RecipePageError, RecipePageRefused } from "./recipe-pa
 import { DisplayTargetError } from "./adapters/display-target.ts";
 import { deploy, DeployRefused } from "./deploy.ts";
 import { deleteRecipe, planContext, PlanInputError, recordVerdict, siteTrackRecord, writeWeekMenu, type WeekPlan } from "./plan.ts";
+import { listBasketLines, PinInputError, pinProducts, type PinnedProduct } from "./pinned-products.ts";
 import { preview } from "./preview.ts";
 import { publish, UNREACHABLE_MESSAGE } from "./publish.ts";
 import { VaultError } from "./vault.ts";
@@ -42,6 +43,14 @@ Commands:
                         --need (e.g. 400g, 1.5l, 3 for pieces) drops packs that would waste too much
   ah bought <query>     Search the products the household bought before, most often bought first (JSON)
   ah basket             Show Mijn lijst (JSON): products with title, quantity and price, and free-text notes
+  basket lines --week <YYYY-MM-DD>
+                        The ingredient lines of the Recipes a Locked Week Menu buys (JSON): recipe, line,
+                        ingredient, times (dinners), optional, the Pinned Product from Products.md, and for
+                        pinned lines the ready "match" for basket fill (packFraction null when the line's
+                        amount and the Pack don't compare)
+  products pin <pins.json>
+                        Add confirmed matches to Products.md ([{ingredient, product, title, pack, kind}];
+                        product null for none); a pin for an ingredient already there replaces its row
   basket fill --week <YYYY-MM-DD> <matches.json>
                         Fill Mijn lijst for a Locked Week Menu from the fill-basket skill's matches
                         ({"lines": [{recipe, line, product, packFraction, kind}], "haveAtHome": [ids]}):
@@ -154,9 +163,25 @@ async function main(args: string[]): Promise<void> {
       return recipe(rest);
     case "plan":
       return plan(rest);
+    case "products":
+      return products(rest);
     default:
       throw new UsageError(usage);
   }
+}
+
+async function products(args: string[]): Promise<void> {
+  const [command, ...rest] = args;
+  if (command !== "pin" || rest.length !== 1) throw new UsageError(usage);
+  let pins: PinnedProduct[];
+  try {
+    pins = JSON.parse(await readFile(path.resolve(rest[0]), "utf8"));
+  } catch (error) {
+    throw new PinInputError(`${rest[0]} is not a JSON list of pins: ${(error as Error).message}`);
+  }
+  if (!Array.isArray(pins)) throw new PinInputError(`${rest[0]}: expected a JSON list of pins`);
+  const done = await pinProducts(await vaultPath(), pins);
+  process.stdout.write(done.map((line) => line + "\n").join(""));
 }
 
 async function plan(args: string[]): Promise<void> {
@@ -317,6 +342,12 @@ async function ah(args: string[]): Promise<void> {
 
 async function basket(args: string[]): Promise<void> {
   const [command, ...rest] = args;
+  if (command === "lines") {
+    const { values, positionals } = parseArgs({ args: rest, allowPositionals: true, options: { week: { type: "string" } } });
+    if (positionals.length !== 0 || !values.week) throw new UsageError(usage);
+    process.stdout.write(JSON.stringify(await listBasketLines(await vaultPath(), values.week), null, 2) + "\n");
+    return;
+  }
   if (command !== "fill") throw new UsageError(usage);
   const { values, positionals } = parseArgs({ args: rest, allowPositionals: true, options: { week: { type: "string" } } });
   if (positionals.length !== 1 || !values.week) throw new UsageError(usage);
@@ -328,7 +359,7 @@ async function basket(args: string[]): Promise<void> {
 }
 
 main(process.argv.slice(2)).catch((error) => {
-  const expected = [UsageError, VaultError, DeployRefused, DisplayTargetError, AhError, AppleNotesError, BasketInputError, PlanInputError].some(
+  const expected = [UsageError, VaultError, DeployRefused, DisplayTargetError, AhError, AppleNotesError, BasketInputError, PlanInputError, PinInputError].some(
     (type) => error instanceof type,
   );
   process.stderr.write(expected ? error.message.trimEnd() + "\n" : `${error.stack ?? error}\n`);

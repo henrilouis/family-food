@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { AhError, AhLoginError, AhUnavailableError, type AhGateway } from "./adapters/ah/gateway.ts";
+import type { Ingredient } from "../bundle/bundle.ts";
 import {
   findRecipeNote,
   NoteError,
@@ -22,7 +23,7 @@ const OPTIONAL = /\boptional\b|\bif you (?:want|like)\b/i;
 
 /** A Pinned Product's kind: decides the rounding, and whether it is bought at all. */
 export type Kind = "Fresh" | "Cupboard Ingredient" | "Always in House";
-const KINDS: Kind[] = ["Fresh", "Cupboard Ingredient", "Always in House"];
+export const KINDS: Kind[] = ["Fresh", "Cupboard Ingredient", "Always in House"];
 
 /** One ingredient line of a Recipe on the Week Menu, as the fill-basket skill matched it. */
 export type Match = {
@@ -82,24 +83,47 @@ export type BasketRecord = {
   lines: string[];
 };
 
+/** An ingredient line of a Recipe or Side the Week Menu buys, and the number of dinners it is bought for. */
+export type WeekLine = {
+  /** The Recipe or Side, by note name. */
+  recipe: string;
+  ingredient: Ingredient;
+  /** 1 per day it is on, 2 on a Double cook day (a Double 2nd day buys nothing). */
+  times: number;
+  /** "Wraps if you want", "chilli flakes (optional)": never bought. */
+  optional: boolean;
+};
+
+/** The Locked Week Menu starting on `weekStart`, and every ingredient line of the Recipes and Sides it buys, in order. */
+export async function weekLines(vault: string, weekStart: string): Promise<{ note: Note; lines: WeekLine[] }> {
+  const note = (await readWeekMenuNotes(vault)).find((n) => weekStartOf(n) === weekStart);
+  if (!note) throw new VaultError(`No Week Menu for the week of ${weekStart} in "Week menus"`);
+  const times = new Map<string, number>();
+  for (const day of parseWeekMenu(note).days) {
+    if (day.double === "second") continue;
+    for (const name of [day.dinner, day.side]) {
+      if (name) times.set(name, (times.get(name) ?? 0) + (day.double === "cook" ? 2 : 1));
+    }
+  }
+  const lines: WeekLine[] = [];
+  for (const [recipe, count] of times) {
+    const recipeNote = await findRecipeNote(vault, recipe);
+    if (!recipeNote) throw new VaultError(`No Recipe "${recipe}" in Meals or Sides`);
+    for (const ingredient of parseRecipe(recipe, recipeNote).ingredients.flatMap((group) => group.items)) {
+      const line = ingredient.amount ? `${ingredient.amount.text} ${ingredient.text}` : ingredient.text;
+      lines.push({ recipe, ingredient, times: count, optional: OPTIONAL.test(line) });
+    }
+  }
+  return { note, lines };
+}
+
 /**
  * Works out what the Locked Week Menu starting on `weekStart` needs from AH: each ingredient line as written,
  * ×2 on a Double cook day, nothing for a Double 2nd day, the Free Day or optional lines; plus the Staples;
  * summed per product, then rounded to whole packs; without Always in House items and what is at home.
  */
 export async function planBasket(vault: string, weekStart: string, input: BasketInput): Promise<BasketPlan> {
-  const note = (await readWeekMenuNotes(vault)).find((n) => weekStartOf(n) === weekStart);
-  if (!note) throw new VaultError(`No Week Menu for the week of ${weekStart} in "Week menus"`);
-  const menu = parseWeekMenu(note);
-
-  const times = new Map<string, number>();
-  for (const day of menu.days) {
-    if (day.double === "second") continue;
-    for (const name of [day.dinner, day.side]) {
-      if (name) times.set(name, (times.get(name) ?? 0) + (day.double === "cook" ? 2 : 1));
-    }
-  }
-
+  const { note, lines } = await weekLines(vault, weekStart);
   const problems: string[] = [];
   const used = new Set<Match>();
   type Sum = { total: number; fresh: boolean; recipe: boolean; covers: string[]; title: string | null };
@@ -110,52 +134,48 @@ export async function planBasket(vault: string, weekStart: string, input: Basket
   const optional = new Set<string>();
   const haveAtHome = new Set<string>();
 
-  for (const [recipeName, count] of times) {
-    const recipeNote = await findRecipeNote(vault, recipeName);
-    if (!recipeNote) throw new VaultError(`No Recipe "${recipeName}" in Meals or Sides`);
-    for (const ingredient of parseRecipe(recipeName, recipeNote).ingredients.flatMap((group) => group.items)) {
-      const line = ingredient.amount ? `${ingredient.amount.text} ${ingredient.text}` : ingredient.text;
-      const name = ingredientName(ingredient.text);
-      const match = input.lines.find((m) => sameName(m.recipe, recipeName) && sameLine(m.line, line));
-      if (match) used.add(match);
-      if (OPTIONAL.test(line)) {
-        optional.add(`${recipeName}: ${line}`);
-        continue;
-      }
-      if (!match) {
-        problems.push(`${recipeName}: no match for "${line}"`);
-        continue;
-      }
-      if (match.kind !== undefined && !KINDS.includes(match.kind)) {
-        problems.push(`${recipeName}: "${line}" has kind "${match.kind}"; expected one of ${KINDS.join(", ")}`);
-        continue;
-      }
-      if (match.kind === "Always in House") continue;
-      if (!match.product) {
-        const note = notes.get(name.toLowerCase()) ?? { name, amounts: new Map<string, number>() };
-        if (ingredient.amount) {
-          const unit = ingredient.amount.unit;
-          note.amounts.set(unit, (note.amounts.get(unit) ?? 0) + ingredient.amount.quantity * count);
-        }
-        notes.set(name.toLowerCase(), note);
-        continue;
-      }
-      if (!match.kind) problems.push(`${recipeName}: "${line}" has a product but no kind`);
-      if (!(typeof match.packFraction === "number" && match.packFraction > 0)) {
-        problems.push(`${recipeName}: "${line}" has a product but no packFraction above 0`);
-        continue;
-      }
-      if (input.haveAtHome?.includes(match.product)) {
-        haveAtHome.add(name);
-        continue;
-      }
-      const sum = product(match.product);
-      sum.total += match.packFraction * count;
-      sum.fresh &&= match.kind === "Fresh";
-      sum.recipe = true;
-      sum.title ??= match.title ?? null;
-      addOnce(sum.covers, name);
+  for (const { recipe: recipeName, ingredient, times: count, optional: isOptional } of lines) {
+    const line = ingredient.amount ? `${ingredient.amount.text} ${ingredient.text}` : ingredient.text;
+    const name = ingredientName(ingredient.text);
+    const match = input.lines.find((m) => sameName(m.recipe, recipeName) && sameLine(m.line, line));
+    if (match) used.add(match);
+    if (isOptional) {
+      optional.add(`${recipeName}: ${line}`);
+      continue;
     }
+    if (!match) {
+      problems.push(`${recipeName}: no match for "${line}"`);
+      continue;
+    }
+    if (match.kind !== undefined && !KINDS.includes(match.kind)) {
+      problems.push(`${recipeName}: "${line}" has kind "${match.kind}"; expected one of ${KINDS.join(", ")}`);
+      continue;
+    }
+    if (match.kind === "Always in House") continue;
+    if (!match.product) {
+      const note = notes.get(name.toLowerCase()) ?? { name, amounts: new Map<string, number>() };
+      if (ingredient.amount) {
+        const unit = ingredient.amount.unit;
+        note.amounts.set(unit, (note.amounts.get(unit) ?? 0) + ingredient.amount.quantity * count);
+      }
+      notes.set(name.toLowerCase(), note);
+      continue;
+    }
+    if (!match.kind) problems.push(`${recipeName}: "${line}" has a product but no kind`);
+    if (!(typeof match.packFraction === "number" && match.packFraction > 0)) {
+      problems.push(`${recipeName}: "${line}" has a product but no packFraction above 0`);
+      continue;
+    }
+    if (input.haveAtHome?.includes(match.product)) {
+      haveAtHome.add(name);
+      continue;
+    }
+    const sum = product(match.product);
+    sum.total += match.packFraction * count;
+    sum.fresh &&= match.kind === "Fresh";
+    sum.recipe = true;
+    sum.title ??= match.title ?? null;
+    addOnce(sum.covers, name);
   }
   for (const match of input.lines) {
     if (!used.has(match)) problems.push(`${match.recipe}: "${match.line}" is not an ingredient line of a Recipe bought this week`);
@@ -279,7 +299,7 @@ function wholePacks(total: number, fresh: boolean): number {
 }
 
 /** An ingredient line's ingredient without its preparation: "onion, finely chopped" → "onion". */
-function ingredientName(text: string): string {
+export function ingredientName(text: string): string {
   return text.split(",")[0].trim();
 }
 
