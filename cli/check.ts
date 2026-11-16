@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { MenuDay } from "../bundle/bundle.ts";
 import { dayLabel } from "../bundle/dates.ts";
-import { parseAmount } from "./amount.ts";
+import { parseRecipeAmount } from "./amount.ts";
 import { isPublished } from "./build-bundle.ts";
 import { findRecipeNote, linkTarget, NoteError, parseRecipe, parseWeekMenu, readNotes, readWeekMenuNotes, RECIPE_FOLDERS, weekStartOf, type Note } from "./vault.ts";
 
@@ -130,7 +130,7 @@ function amountProblems(note: Note): string[] {
   let step: string | null = null;
   const checkStep = (text: string) => {
     for (const [, amount] of text.matchAll(ITALIC)) {
-      if (!parseAmount(amount)) problems.push(`step ${step}: the amount "${amount}" doesn't start with a number`);
+      if (!parseRecipeAmount(amount)) problems.push(`step ${step}: the amount "${amount}" doesn't start with a number`);
     }
   };
   for (const line of note.body.split("\n")) {
@@ -139,7 +139,7 @@ function amountProblems(note: Note): string[] {
       section = m[1].trim().toLowerCase();
       step = null;
     } else if (section === "ingredients" && (m = line.match(/^\s*[-*] \*([^*]+)\*/))) {
-      if (!parseAmount(m[1])) problems.push(`the ingredient amount "${m[1]}" doesn't start with a number`);
+      if (!parseRecipeAmount(m[1])) problems.push(`the ingredient amount "${m[1]}" doesn't start with a number`);
     } else if (section === "method") {
       if ((m = line.match(/^(\d+)[.)]\s+(.*)/))) {
         step = m[1];

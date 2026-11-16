@@ -1,7 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Amount, Ingredient } from "../bundle/bundle.ts";
-import { parseAmount as parseAhAmount, type Amount as AhAmount } from "./adapters/ah/gateway.ts";
+import { measureOf, parseMeasure } from "./amount.ts";
 import { ingredientName, KINDS, weekLines, type Kind, type Match } from "./basket.ts";
 import { NoteError, readNote, tableRows, type Note } from "./vault.ts";
 
@@ -78,32 +78,15 @@ function pinnedMatch(recipe: string, line: string, ingredient: Ingredient, pin: 
 function packFraction(amount: Amount | null, pack: string): number | null {
   if (!amount) return null;
   const [size, pieces] = pack.split(/[≈~]/);
-  const packAmount = parseAhAmount(size?.trim());
+  const packSize = parseMeasure(size?.trim());
   const piecesPerPack = Number(pieces?.trim().match(/^\d+(?:[.,]\d+)?/)?.[0].replace(",", "."));
-  const need = amountOf(amount);
-  if (!need || !packAmount) return null;
+  const need = measureOf(amount);
+  if (!need || !packSize) return null;
   let share: number;
-  if (need.dimension === packAmount.dimension) share = need.value / packAmount.value;
+  if (need.dimension === packSize.dimension) share = need.value / packSize.value;
   else if (need.dimension === "count" && piecesPerPack > 0) share = need.value / piecesPerPack;
   else return null;
   return Number(share.toFixed(3));
-}
-
-const SPOONS: Record<string, number> = { tsp: 5, tbsp: 15 };
-const PIECES = ["", "large", "medium", "small", "whole"];
-
-/** A Recipe amount in g, ml or pieces: "300g", "1 tbsp" (15 ml), "2 tins (400 g)", "1 large" (a piece). */
-function amountOf({ quantity, unit }: Amount): AhAmount | null {
-  const u = unit.trim().toLowerCase();
-  const tin = u.match(/^tins?\s*\((.+)\)$/);
-  if (tin) {
-    const size = parseAhAmount(tin[1]);
-    return size && { ...size, value: size.value * quantity };
-  }
-  if (u in SPOONS) return { dimension: "volume", value: quantity * SPOONS[u] };
-  if (PIECES.includes(u)) return { dimension: "count", value: quantity };
-  const one = parseAhAmount(`1 ${u}`);
-  return one && { ...one, value: one.value * quantity };
 }
 
 /** Products.md's rows; none when the note doesn't exist. The webshop id is in an AH id column, or in brackets after the product. */

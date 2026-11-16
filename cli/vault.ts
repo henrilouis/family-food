@@ -3,7 +3,7 @@ import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { Ingredient, IngredientGroup, MenuDay, Recipe, WeekMenu } from "../bundle/bundle.ts";
 import { addDays } from "../bundle/dates.ts";
-import { parseAmount } from "./amount.ts";
+import { parseRecipeAmount } from "./amount.ts";
 import { ingredientWords, markStep } from "./step.ts";
 
 /** The vault folder of the Week Menu notes. */
@@ -184,7 +184,7 @@ export function parseRecipe(name: string, note: Note): Recipe {
   const vocabulary = ingredientWords(recipe.ingredients);
   recipe.method = steps.map((step) =>
     markStep(plainText(step), vocabulary, (amount) => {
-      const parsed = parseAmount(amount);
+      const parsed = parseRecipeAmount(amount);
       if (!parsed) throw new NoteError(note.file, `the amount "${amount}" in the Method step "${step}" doesn't start with a number`);
       return parsed;
     }),
@@ -196,7 +196,7 @@ export function parseRecipe(name: string, note: Note): Recipe {
 function parseIngredient(file: string, line: string): Ingredient {
   const italic = line.match(/^\*([^*]+)\*\s*(.*)$/);
   if (!italic) return { amount: null, text: plainText(line) };
-  const amount = parseAmount(italic[1]);
+  const amount = parseRecipeAmount(italic[1]);
   if (!amount) throw new NoteError(file, `the amount "${italic[1]}" in "${line}" doesn't start with a number`);
   return { amount, text: plainText(italic[2]) };
 }

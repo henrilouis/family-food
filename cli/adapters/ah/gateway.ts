@@ -15,12 +15,8 @@ import {
 } from "./allerhande.ts";
 import { AhError, AhLoginError, type AhBasket, type AhBasketAdditions, type AhClient } from "./client.ts";
 import { fakeAhClient } from "./fake.ts";
-import { previouslyBought, rankProducts, type Amount, type Product } from "./products.ts";
-
-export { AhError, AhLoginError, AhUnavailableError } from "./client.ts";
-export { parseAmount, type Amount, type Product } from "./products.ts";
-export type { AhBasketAdditions as BasketAdditions } from "./client.ts";
-export { allerhandeRecipeId, type AllerhandeCandidate, type ProductSuggestion } from "./allerhande.ts";
+import { previouslyBought, rankProducts, type Product } from "./products.ts";
+import type { Measure } from "../../amount.ts";
 
 /** An Allerhande search: free text, and Allerhande's own season and cuisine values ("winter", "italiaans"). */
 export type AllerhandeSearch = { text?: string; season?: string; cuisine?: string; size?: number };
@@ -45,7 +41,7 @@ export interface AhGateway {
    * Product search, cleaned up and ranked by unit price; `need` drops packs that would waste too much.
    * Uses the user token once logged in (it marks previously bought products), an anonymous token before.
    */
-  searchProducts(query: string, options?: { need?: Amount }): Promise<Product[]>;
+  searchProducts(query: string, options?: { need?: Measure }): Promise<Product[]>;
   /** The household's previously bought products that match, most frequently bought first. Needs the login. */
   searchPreviouslyBought(query: string): Promise<Product[]>;
   /** Mijn lijst. Needs the login. */

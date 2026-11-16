@@ -2,7 +2,10 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { AhError, ahGateway, allerhandeRecipeId, parseAmount } from "./adapters/ah/gateway.ts";
+import { allerhandeRecipeId } from "./adapters/ah/allerhande.ts";
+import { AhError } from "./adapters/ah/client.ts";
+import { ahGateway } from "./adapters/ah/gateway.ts";
+import { parseMeasure } from "./amount.ts";
 import { BasketInputError, exitCode, fillBasket, formatReport, planBasket, readBasketInput, writeBasketSection } from "./basket.ts";
 import { AppleNotesError, familyNotes, FOOD_WISHES, RECIPES_TO_ADD, type Deletion } from "./adapters/apple-notes/notes.ts";
 import { buildBundle, publishedWeekMenusWith } from "./build-bundle.ts";
@@ -331,7 +334,7 @@ async function ah(args: string[]): Promise<void> {
         options: { need: { type: "string" } },
       });
       if (positionals.length === 0) throw new UsageError(usage);
-      const need = values.need === undefined ? undefined : parseAmount(values.need);
+      const need = values.need === undefined ? undefined : parseMeasure(values.need);
       if (need === null) {
         throw new UsageError(`--need must be an amount such as 400g, 1.5l or 3 (pieces), not "${values.need}"`);
       }

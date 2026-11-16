@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { AhError, AhLoginError, AhUnavailableError, type AhGateway } from "./adapters/ah/gateway.ts";
+import { AhError, AhLoginError, AhUnavailableError } from "./adapters/ah/client.ts";
+import type { AhGateway } from "./adapters/ah/gateway.ts";
 import type { Ingredient } from "../bundle/bundle.ts";
 import {
   findRecipeNote,
