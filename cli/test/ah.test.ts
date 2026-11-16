@@ -229,3 +229,38 @@ describe("food ah refresh", () => {
     expect(result.stderr).toContain("food ah login");
   });
 });
+
+describe("food ah basket", () => {
+  test("shows Mijn lijst with each product's title, quantity and price, and the free-text notes", async () => {
+    const { run, state } = await fakeAh([
+      { webshopId: 1, title: "AH Halfvolle melk", brand: "AH", salesUnitSize: "1 l", priceBeforeBonus: 1.15 },
+      { webshopId: 2, title: "AH Spaghetti", brand: "AH", salesUnitSize: "500 g", priceBeforeBonus: 1.29, currentPrice: 0.99, isBonus: true },
+    ]);
+    await writeFile(
+      path.join(state, "basket.json"),
+      JSON.stringify({ products: [{ id: 1, quantity: 2 }, { id: 2, quantity: 1 }], notes: [{ description: "limoenblaadjes", quantity: 1 }] }),
+    );
+    await run(["ah", "login"]);
+
+    const result = await run(["ah", "basket"]);
+
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual({
+      products: [
+        { id: 1, title: "AH Halfvolle melk", quantity: 2, price: 1.15 },
+        { id: 2, title: "AH Spaghetti", quantity: 1, price: 0.99 },
+      ],
+      notes: [{ description: "limoenblaadjes", quantity: 1 }],
+    });
+  });
+
+  test("asks to log in first", async () => {
+    const { run } = await fakeAh([]);
+
+    const result = await run(["ah", "basket"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("food ah login");
+  });
+});

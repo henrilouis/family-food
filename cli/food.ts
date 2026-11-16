@@ -2,6 +2,7 @@
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { AhError, ahGateway, parseAmount } from "./adapters/ah/gateway.ts";
+import { BasketInputError, fillBasket, formatReport, planBasket, readBasketInput, writeBasketSection } from "./basket.ts";
 import { AppleNotesError, familyNotes, FOOD_WISHES, RECIPES_TO_ADD, type Deletion } from "./adapters/apple-notes/notes.ts";
 import { buildBundle, publishedWeekMenusWith } from "./build-bundle.ts";
 import { writeBundleFiles } from "./bundle-files.ts";
@@ -38,6 +39,12 @@ Commands:
                         Search AH products, cleaned up and cheapest per kg, l or piece first (JSON);
                         --need (e.g. 400g, 1.5l, 3 for pieces) drops packs that would waste too much
   ah bought <query>     Search the products the household bought before, most often bought first (JSON)
+  ah basket             Show Mijn lijst (JSON): products with title, quantity and price, and free-text notes
+  basket fill --week <YYYY-MM-DD> <matches.json>
+                        Fill Mijn lijst for a Locked Week Menu from the fill-basket skill's matches
+                        ({"lines": [{recipe, line, product, packFraction, kind}], "haveAtHome": [ids]}):
+                        Doubles ×2, Staples added, summed and rounded to whole packs, unmatched lines as
+                        notes. Never removes anything. Writes the Week Menu's ## Basket section and a report
   notes wishes [--json] List the Wishes in the shared Apple Note "Food wishes", one per line
   notes wishes delete <wish>... [--json]
                         Delete Wishes once a Week Menu honours them
@@ -119,6 +126,8 @@ async function main(args: string[]): Promise<void> {
       return;
     case "ah":
       return ah(rest);
+    case "basket":
+      return basket(rest);
     case "notes":
       return notes(rest);
     case "recipe":
@@ -236,13 +245,29 @@ async function ah(args: string[]): Promise<void> {
       print(await gateway.searchPreviouslyBought(rest.join(" ")));
       return;
     }
+    case "basket":
+      print(await gateway.readBasket());
+      return;
     default:
       throw new UsageError(usage);
   }
 }
 
+async function basket(args: string[]): Promise<void> {
+  const [command, ...rest] = args;
+  if (command !== "fill") throw new UsageError(usage);
+  const { values, positionals } = parseArgs({ args: rest, allowPositionals: true, options: { week: { type: "string" } } });
+  if (positionals.length !== 1 || !values.week) throw new UsageError(usage);
+  const plan = await planBasket(await vaultPath(), values.week, await readBasketInput(positionals[0]));
+  const result = await fillBasket(plan, ahGateway(await readConfig()));
+  await writeBasketSection(result);
+  process.stdout.write(formatReport(result));
+}
+
 main(process.argv.slice(2)).catch((error) => {
-  const expected = [UsageError, VaultError, DeployRefused, DisplayTargetError, AhError, AppleNotesError].some((type) => error instanceof type);
+  const expected = [UsageError, VaultError, DeployRefused, DisplayTargetError, AhError, AppleNotesError, BasketInputError].some(
+    (type) => error instanceof type,
+  );
   process.stderr.write(expected ? error.message.trimEnd() + "\n" : `${error.stack ?? error}\n`);
   process.exitCode = 1;
 });

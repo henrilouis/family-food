@@ -2,12 +2,21 @@ import { access, chmod, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { configDir, type Config } from "../../config.ts";
 import { ahdumpClient } from "./ahdump.ts";
-import { AhLoginError, type AhClient } from "./client.ts";
+import { AhLoginError, type AhBasket, type AhBasketAdditions, type AhClient } from "./client.ts";
 import { fakeAhClient } from "./fake.ts";
 import { previouslyBought, rankProducts, type Amount, type Product } from "./products.ts";
 
 export { AhError, AhLoginError } from "./client.ts";
 export { parseAmount, type Amount, type Product } from "./products.ts";
+export type { AhBasketAdditions as BasketAdditions } from "./client.ts";
+
+/** Mijn lijst: the Basket before checkout. */
+export type Basket = {
+  /** One line per product; `price` is the price of one pack now (Bonus included), null when AH doesn't say. */
+  products: { id: number; title: string; quantity: number; price: number | null }[];
+  /** Free-text notes. */
+  notes: { description: string; quantity: number }[];
+};
 
 /**
  * Everything the `food` CLI does with Albert Heijn. It never removes items and never checks out.
@@ -24,6 +33,13 @@ export interface AhGateway {
   searchProducts(query: string, options?: { need?: Amount }): Promise<Product[]>;
   /** The household's previously bought products that match, most frequently bought first. Needs the login. */
   searchPreviouslyBought(query: string): Promise<Product[]>;
+  /** Mijn lijst. Needs the login. */
+  readBasket(): Promise<Basket>;
+  /**
+   * Adds products and free-text notes to Mijn lijst; a product already there gets the quantity added to its line.
+   * Returns Mijn lijst after. Needs the login.
+   */
+  addToBasket(additions: AhBasketAdditions): Promise<Basket>;
 }
 
 /** The AH gateway: the fake when the local config names a folder for it in `fakes.ah`, the real AH otherwise. */
@@ -52,5 +68,25 @@ export function ahGateway(config: Config): AhGateway {
       if (!(await loggedIn())) throw new AhLoginError();
       return previouslyBought(await client.searchByPurchaseFrequency(query));
     },
+    async readBasket() {
+      if (!(await loggedIn())) throw new AhLoginError();
+      return basket(await client.basket());
+    },
+    async addToBasket(additions) {
+      if (!(await loggedIn())) throw new AhLoginError();
+      return basket(await client.addToBasket(additions));
+    },
+  };
+}
+
+function basket(ah: AhBasket): Basket {
+  return {
+    products: (ah.itemsInList ?? []).map(({ quantity, product }) => ({
+      id: product.id,
+      title: product.title,
+      quantity,
+      price: product.priceV2?.now?.amount ?? null,
+    })),
+    notes: (ah.notes ?? []).map(({ description, quantity }) => ({ description, quantity })),
   };
 }

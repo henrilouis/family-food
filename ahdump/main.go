@@ -1,10 +1,12 @@
 // ahdump is the family-food CLI's way into Albert Heijn's unofficial app API,
 // through appie-go. The `food` CLI runs it; each command prints JSON on stdout.
-// It reads and never removes or checks out anything.
+// It only adds to Mijn lijst, and never removes or checks out anything.
 //
 //	ahdump -auth <token file> login
 //	ahdump -auth <token file> refresh
 //	ahdump -auth <token file> search [-token anonymous|user] [-sort RELEVANCE|PURCHASE_FREQUENCY] [--] <query>
+//	ahdump -auth <token file> basket
+//	ahdump -auth <token file> basket-add < {"products": [{"id", "quantity"}], "notes": [{"description", "quantity"}]}
 //	ahdump -auth <token file> history -out <folder>
 //
 // Exit codes: 0 done, 1 failed, 3 not logged in or AH refused the login (run login again).
@@ -12,6 +14,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -29,6 +32,10 @@ commands:
   refresh                 renew the login now
   search [-token anonymous|user] [-sort RELEVANCE|PURCHASE_FREQUENCY] [--] <query>
                           print AH's product search results as JSON
+  basket                  print Mijn lijst as JSON
+  basket-add              add the products and free-text notes given as JSON on stdin to Mijn lijst
+                          ({"products": [{"id", "quantity"}], "notes": [{"description", "quantity"}]}),
+                          then print Mijn lijst; quantities add to what is there, nothing is removed
   history -out <folder>   pull closed online orders and in-store receipts into a folder`
 
 // errLogin means the user token is missing or AH refused it.
@@ -67,6 +74,13 @@ func main() {
 		err = ah.refresh(ctx)
 	case "search":
 		err = search(ctx, ah, args)
+	case "basket":
+		var basket []byte
+		if basket, err = ah.basket(ctx); err == nil {
+			err = printJSON(json.RawMessage(basket))
+		}
+	case "basket-add":
+		err = basketAdd(ctx, ah)
 	case "history":
 		err = history(ctx, ah, args)
 	default:

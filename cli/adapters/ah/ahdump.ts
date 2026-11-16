@@ -1,7 +1,7 @@
 import { execFile, spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { AhError, AhLoginError, type AhClient, type AhProduct } from "./client.ts";
+import { AhError, AhLoginError, type AhBasket, type AhClient, type AhProduct } from "./client.ts";
 
 /** Built by `npm run build:ahdump` from `ahdump/` in this repo. */
 const binary = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../ahdump/ahdump");
@@ -18,13 +18,14 @@ function failure(code: number | null, stderr: string): Error {
 
 /** The real AH, through the Go `ahdump` tool (appie-go, pinned to the fork that fixes the November 2026 login change). */
 export function ahdumpClient(tokenFile: string): AhClient {
-  const ahdump = (args: string[]): Promise<string> =>
+  const ahdump = (args: string[], input?: string): Promise<string> =>
     new Promise((resolve, reject) => {
-      execFile(binary, ["-auth", tokenFile, ...args], { maxBuffer: 16 * 1024 * 1024 }, (error, stdout, stderr) => {
+      const child = execFile(binary, ["-auth", tokenFile, ...args], { maxBuffer: 16 * 1024 * 1024 }, (error, stdout, stderr) => {
         if (!error) return resolve(stdout);
         if ((error as NodeJS.ErrnoException).code === "ENOENT") return reject(notBuilt());
         reject(failure(typeof error.code === "number" ? error.code : null, stderr));
       });
+      child.stdin?.end(input ?? "");
     });
 
   const products = async (args: string[]): Promise<AhProduct[]> => JSON.parse(await ahdump(args));
@@ -43,5 +44,7 @@ export function ahdumpClient(tokenFile: string): AhClient {
     searchProducts: (query, token) => products(["search", "-token", token, "--", query]),
     searchByPurchaseFrequency: (query) =>
       products(["search", "-token", "user", "-sort", "PURCHASE_FREQUENCY", "--", query]),
+    basket: async (): Promise<AhBasket> => JSON.parse(await ahdump(["basket"])),
+    addToBasket: async (additions): Promise<AhBasket> => JSON.parse(await ahdump(["basket-add"], JSON.stringify(additions))),
   };
 }
