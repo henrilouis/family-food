@@ -86,6 +86,16 @@ describe("Food wishes", () => {
     expect(JSON.parse(result.stdout)).toMatchObject({ deleted: [], notFound: [], deleteByHand: ["Pasta pesto"] });
     expect(JSON.parse(result.stdout).error).toContain('No note "Food wishes"');
   });
+
+  test("listing a note that can't be read fails with the reason", async () => {
+    const { run, fake } = await sandbox();
+    await fake("apple-notes");
+
+    const result = await run(["notes", "wishes"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toMatch(/^No note "Food wishes" in the Apple Notes folder "Family food"/);
+  });
 });
 
 const recipesNote = [

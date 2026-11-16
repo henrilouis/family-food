@@ -11,6 +11,7 @@ The household's dinner planning, Albert Heijn Basket and Kitchen Display. See `G
 - `pi/`: the Kitchen Display Pi's setup script and Caddy config, run and uploaded by `food deploy`
 - `samples/`: a small sample Recipe Vault and the sample bundles built from it, used by the tests
 - `docs/meal-properties.md`: the Meal properties and the fixed `cuisine` and `base` lists, which `food vault check` reads
+- `docs/apple-notes.md`: the shared "Family food" Apple Notes, the `food notes` commands and the checks to do by hand
 
 ## Setup
 
@@ -33,9 +34,19 @@ food ah bought melk                       # what the household bought before
 
 The AH token is kept in the local config folder with mode 600, never in the Recipe Vault. The tests use a fake AH; `ahdump/README.md` lists the checks to do by hand against the live API.
 
+## Apple Notes
+
+```sh
+food notes wishes --json                       # the Wishes in "Food wishes"
+food notes wishes delete "Pasta pesto" --json  # exit 2 + "deleteByHand" when Notes won't take the change
+food notes recipes-to-add --json               # URLs and pasted recipes in "Recipes to add"
+```
+
+`food publish` also rewrites the "This week" note. See `docs/apple-notes.md`, including the checks to do by hand against the real shared folder.
+
 ## Local config
 
-The local config lives in `~/Library/Application Support/family-food/` (`FOOD_CONFIG_DIR` overrides it). `FOOD_NOW` fixes the CLI's clock. The config's `fakes` key swaps an adapter for its fake, which keeps its state as JSON files in the folder given (`{ "fakes": { "ah": "/tmp/x/ah" } }`); the tests use this.
+The local config lives in `~/Library/Application Support/family-food/` (`FOOD_CONFIG_DIR` overrides it). `FOOD_NOW` fixes the CLI's clock. The config's `fakes` key swaps an adapter for its fake, which keeps its state as JSON files in the folder given (`{ "fakes": { "ah": "/tmp/x/ah", "apple-notes": "/tmp/x/notes" } }`); the tests use this.
 
 ## Kitchen Display Pi
 
