@@ -44,7 +44,7 @@ Say "fill the Basket" to the agent (the Planning Session does it after "lock it"
 
 `food basket lines` gives each line its ready `match` for `food basket fill` when it has a Pinned Product, with the share of a pack worked out from the Pack column where the amounts compare (g, ml, spoons, tins, pieces with "1 kg ≈ 8 onions").
 
-`food basket fill` is what the fill-basket skill runs once the matches are confirmed. It reads the Week Menu, `Staples.md` and the Recipes, adds to Mijn lijst (never removes), writes the Week Menu's `## Basket` section and prints a report. Run again after a menu change, it adds only the difference with `## Basket` and lists what is no longer needed. It exits 2 when it wrote nothing to AH and someone has to act on its output:
+`food basket fill` is what the fill-basket skill runs once the matches are confirmed. It reads the Week Menu, `Staples.md` and the Recipes, adds to Mijn lijst (never removes; an ingredient or chosen Staple without an AH product goes in as a free-text note), writes the Week Menu's `## Basket` section and prints a report. Run again after a menu change, it adds only the difference with `## Basket` and lists what is no longer needed. It exits 2 when it wrote nothing to AH and someone has to act on its output:
 
 - the coming Saturday's order is already placed: add-multiple links (25 products each) and a grouped shopping list, or, when the Basket was filled before checkout and the menu changed since, an add-and-remove list for Mijn bestellingen;
 - the AH login failed, also after logging in again once in the browser: add-multiple links and the shopping list;

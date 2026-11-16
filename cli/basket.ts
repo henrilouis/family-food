@@ -65,7 +65,7 @@ export type BasketPlan = {
   file: string;
   /** Whole packs per product, and the ingredients and Staples each covers. */
   products: PlannedProduct[];
-  /** Ingredients with no AH product, as free-text notes for Mijn lijst: "lime leaves (25)". */
+  /** Ingredients and Staples with no AH product, as free-text notes for Mijn lijst: "lime leaves (25)", "Tea (Staple ×1)". */
   notes: string[];
   /** Optional lines, not bought: "Tacos: 8 tortilla wraps (optional)". */
   optional: string[];
@@ -182,7 +182,9 @@ export async function planBasket(vault: string, weekStart: string, input: Basket
   }
   if (problems.length) throw new BasketInputError(`The matches don't fit the Week Menu of ${weekStart}:\n${problems.map((p) => `- ${p}`).join("\n")}`);
 
-  for (const staple of await staplesThisWeek(vault, note)) {
+  const staples = await staplesThisWeek(vault, note);
+  for (const staple of staples) {
+    if (staple.product === null) continue;
     const sum = product(staple.product);
     sum.total += staple.quantity;
     sum.title ??= staple.title;
@@ -199,9 +201,12 @@ export async function planBasket(vault: string, weekStart: string, input: Basket
       title,
       group: !recipe ? "Staples" : fresh ? "Fresh" : "Cupboard Ingredients",
     })),
-    notes: [...notes.values()].map(({ name, amounts }) =>
-      amounts.size ? `${name} (${[...amounts].map(([unit, q]) => [number(q), unit].filter(Boolean).join(" ")).join(" + ")})` : name,
-    ),
+    notes: [
+      ...[...notes.values()].map(({ name, amounts }) =>
+        amounts.size ? `${name} (${[...amounts].map(([unit, q]) => [number(q), unit].filter(Boolean).join(" ")).join(" + ")})` : name,
+      ),
+      ...staples.filter((staple) => staple.product === null).map((staple) => `${staple.name} (Staple ×${staple.quantity})`),
+    ],
     optional: [...optional],
     haveAtHome: [...haveAtHome],
     recorded: basketRecord(note),
@@ -214,8 +219,9 @@ type Staple = { name: string; product: number | null; title: string; quantity: n
  * The Staples this week's Basket gets: the Weekly Staples, changed by the Week Menu's `## Staples this week`:
  * "- Skip: milk ×1" (one fewer; without ×n none at all), "- Extra: eggs ×1" (more; ×1 without ×n),
  * "- Ask Staples: peanut butter, oats ×2" (chosen Ask Staples; their usual quantity without ×n).
+ * A Staple without an AH product id is bought as a free-text note.
  */
-export async function staplesThisWeek(vault: string, weekMenu: Note): Promise<(Staple & { product: number })[]> {
+export async function staplesThisWeek(vault: string, weekMenu: Note): Promise<Staple[]> {
   const staples = await readStaples(vault);
   const chosen = new Map(staples.filter((s) => s.kind === "Weekly").map((s) => [s, s.quantity]));
   for (const line of section(weekMenu.body, "Staples this week")) {
@@ -237,12 +243,7 @@ export async function staplesThisWeek(vault: string, weekMenu: Note): Promise<(S
       else chosen.set(staple, count ?? staple.quantity);
     }
   }
-  const bought = [...chosen].filter(([, quantity]) => quantity > 0);
-  const staplesFile = path.join(vault, STAPLES_NOTE);
-  return bought.map(([staple, quantity]) => {
-    if (staple.product === null) throw new NoteError(staplesFile, `the Staple "${staple.name}" has no AH product id`);
-    return { ...staple, product: staple.product, quantity };
-  });
+  return [...chosen].filter(([, quantity]) => quantity > 0).map(([staple, quantity]) => ({ ...staple, quantity }));
 }
 
 /**

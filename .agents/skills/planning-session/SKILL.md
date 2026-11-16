@@ -105,7 +105,7 @@ Show the Weekly Staples with their quantities and list every Ask Staple, from `S
 - `Extra: eggs ×1` (more than usual)
 - `Ask Staples: peanut butter, oats ×2` (the Ask Staples chosen; ×n overrides the usual quantity)
 
-"From now on" answers are [standing edits](#standing-edits), not lines. A chosen Staple without an AH id in `Staples.md` can't go in a line (`food plan write` refuses it): tell the adult to buy it by hand, or pin a product for it as a standing edit.
+"From now on" answers are [standing edits](#standing-edits), not lines. A chosen Staple without an AH id in `Staples.md` goes in a line like any other: Basket filling adds it to Mijn lijst as a free-text note.
 
 Done when every deviation is a line or a standing edit, and the adult has seen the lines.
 

@@ -97,7 +97,9 @@ Write `{ "lines": [entries…], "haveAtHome": [ids…] }` to a temp JSON file. T
 - **Exit 0**: Mijn lijst is filled (or the placed order already has everything). Show the report as printed.
 - **Exit 2**: nothing was written to AH. Show the adult the whole output: it starts with the reason (order already placed, login failed, AH ordering down) and holds the add-multiple links, the shopping list, or what to change in Mijn bestellingen.
 - **Exit 1** with "The matches don't fit the Week Menu": your list is off (a missing line, a line not on this week's Recipes, a product without pack fraction). Nothing was written; fix the entries and run it again.
-- **Exit 1** otherwise: pass the message on. "the Staple "Tea" has no AH product id": the adult buys that Staple by hand, or pins a product for it in Staples.md; after either, run it again.
+- **Exit 1** otherwise: pass the message on.
+
+A chosen Staple without an AH product id in `Staples.md` (Tea, the baby pouches) goes into Mijn lijst as a free-text note, "Tea (Staple ×1)", and is listed with the unmatched items. Nothing to do for it unless the adult wants it pinned: then add its product to `Staples.md` as a standing edit.
 
 Done when the adult has seen the report or the CLI's whole output.
 
