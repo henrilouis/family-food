@@ -1,7 +1,7 @@
 import { execFile, spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { AhError, AhLoginError, type AhBasket, type AhClient, type AhProduct } from "./client.ts";
+import { AhError, AhLoginError, type AhBasket, type AhClient, type AhOrder, type AhProduct } from "./client.ts";
 
 /** Built by `npm run build:ahdump` from `ahdump/` in this repo. */
 const binary = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../ahdump/ahdump");
@@ -46,5 +46,6 @@ export function ahdumpClient(tokenFile: string): AhClient {
       products(["search", "-token", "user", "-sort", "PURCHASE_FREQUENCY", "--", query]),
     basket: async (): Promise<AhBasket> => JSON.parse(await ahdump(["basket"])),
     addToBasket: async (additions): Promise<AhBasket> => JSON.parse(await ahdump(["basket-add"], JSON.stringify(additions))),
+    openOrders: async (): Promise<AhOrder[]> => JSON.parse(await ahdump(["orders"])),
   };
 }

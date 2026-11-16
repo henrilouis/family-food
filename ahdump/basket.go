@@ -17,6 +17,13 @@ const basketQuery = `query FamilyFoodBasket {
   }
 }`
 
+// The open orders (checked out, or reopened for changes) with their delivery slot, as appie-go's GetFulfillments asks for them.
+const openOrdersQuery = `query FamilyFoodOpenOrders {
+  orderFulfillments(status: OPEN) {
+    result { orderId statusCode statusDescription shoppingType modifiable delivery { status slot { date startTime endTime } } }
+  }
+}`
+
 // basketItemsAdd adds to the quantity already in Mijn lijst; it never sets or removes.
 const basketItemsAdd = `mutation FamilyFoodBasketItemsAdd($items: [BasketMutation!]!) {
   basketItemsAdd(items: $items) { status errorMessage }
@@ -47,6 +54,26 @@ func (a *ah) basket(ctx context.Context) (json.RawMessage, error) {
 		return nil, a.userError("reading Mijn lijst", err)
 	}
 	return result.Basket, nil
+}
+
+// openOrders returns the open orders as AH's GraphQL `orderFulfillments(status: OPEN)` returns them.
+func (a *ah) openOrders(ctx context.Context) (json.RawMessage, error) {
+	c, err := a.userClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var result struct {
+		OrderFulfillments struct {
+			Result json.RawMessage `json:"result"`
+		} `json:"orderFulfillments"`
+	}
+	if err := c.DoGraphQL(ctx, openOrdersQuery, nil, &result); err != nil {
+		return nil, a.userError("reading the open orders", err)
+	}
+	if len(result.OrderFulfillments.Result) == 0 || string(result.OrderFulfillments.Result) == "null" {
+		return json.RawMessage("[]"), nil
+	}
+	return result.OrderFulfillments.Result, nil
 }
 
 // addToBasket adds products through basketItemsAdd and free-text notes through the shopping list's v2 PATCH

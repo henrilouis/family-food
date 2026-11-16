@@ -9,7 +9,7 @@ const repo = path.resolve(import.meta.dirname, "../..");
 type AhProduct = { webshopId: number; title: string; priceBeforeBonus: number; currentPrice?: number };
 
 /** One line of the fill-basket skill's list: an ingredient line of a Recipe and the AH product it matched. */
-type Match = { recipe: string; line: string; product?: number | null; packFraction?: number; kind?: string };
+type Match = { recipe: string; line: string; product?: number | null; packFraction?: number; kind?: string; title?: string };
 
 type FakeBasket = { products: { id: number; quantity: number }[]; notes: { description: string; quantity: number }[] };
 
@@ -518,5 +518,80 @@ describe("food basket fill again", () => {
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("No longer needed, remove these from Mijn lijst by hand: none\n");
+  });
+});
+
+describe("food basket fill once the order is placed", () => {
+  test("writes nothing to AH and gives add-multiple links of 25 products each", async () => {
+    const ids = Array.from({ length: 30 }, (_, i) => i + 1);
+    const box = await basketBox(ids.map((id) => ({ webshopId: id, title: `AH Product ${id}`, priceBeforeBonus: 1 })));
+    await box.recipe("Feast", ids.map((id) => `*${id}* thing ${id}`));
+    await box.weekMenu([["Feast", "", ""]]);
+    await box.mode({ mode: "order placed", date: WEEK });
+
+    const result = await box.fill(
+      ids.map((id) => ({ recipe: "Feast", line: `${id} thing ${id}`, product: id, packFraction: id === 7 ? 2 : 1, kind: "Fresh" })),
+    );
+
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(2);
+    expect(await box.requests()).toEqual([]);
+    const links = result.stdout.match(/https:\/\/\S+/g);
+    expect(links).toEqual([
+      `https://www.ah.nl/mijnlijst/add-multiple?${ids.slice(0, 25).map((id) => `p=${id}:${id === 7 ? 2 : 1}`).join("&")}`,
+      "https://www.ah.nl/mijnlijst/add-multiple?p=26:1&p=27:1&p=28:1&p=29:1&p=30:1",
+    ]);
+    expect(result.stdout).toMatch(/^The order for Saturday 28 Nov is already placed, so nothing was added to Mijn lijst\.\n/);
+  });
+
+  test("also gives a shopping list grouped into Fresh, Cupboard Ingredients, Staples and unmatched items", async () => {
+    const box = await basketBox([
+      { webshopId: 1, title: "AH Spaghetti 500 g", priceBeforeBonus: 1.29 },
+      { webshopId: 2, title: "AH Spinazie 400 g", priceBeforeBonus: 2.19 },
+      { webshopId: 3, title: "AH Halfvolle melk 1 l", priceBeforeBonus: 1.15 },
+    ]);
+    await box.staples([["Milk", "AH Halfvolle melk 1 l (3)", 2, "Weekly"]]);
+    await box.recipe("Pasta", ["*500g* spaghetti", "*400g* spinach", "*10* basil leaves", "chilli flakes (optional)"]);
+    await box.weekMenu([["Pasta", "", "Double: cook"], ["Pasta", "", "Double: 2nd day"]]);
+    await box.mode({ mode: "order placed", date: WEEK });
+
+    const result = await box.fill([
+      { recipe: "Pasta", line: "500g spaghetti", product: 1, packFraction: 1, kind: "Cupboard Ingredient", title: "AH Spaghetti 500 g" },
+      { recipe: "Pasta", line: "400g spinach", product: 2, packFraction: 1, kind: "Fresh" },
+      { recipe: "Pasta", line: "10 basil leaves", product: null },
+    ]);
+
+    expect(result.code).toBe(2);
+    expect(await box.requests()).toEqual([]);
+    expect(result.stdout).toContain(
+      [
+        "Shopping list:",
+        "Fresh:",
+        "- 2 × spinach",
+        "Cupboard Ingredients:",
+        "- 2 × AH Spaghetti 500 g: spaghetti",
+        "Staples:",
+        "- 2 × AH Halfvolle melk 1 l: Milk (Staple)",
+        "Unmatched:",
+        "- basil leaves (20)",
+        "Optional, not added:",
+        "- Pasta: chilli flakes (optional)",
+        "Have at home: none",
+        "",
+      ].join("\n"),
+    );
+    expect(await readFile(box.weekMenuFile(), "utf8")).not.toContain("## Basket");
+  });
+
+  test("fills Mijn lijst as usual when the placed order is for another Saturday", async () => {
+    const box = await basketBox([{ webshopId: 1, title: "AH Spaghetti 500 g", priceBeforeBonus: 1.29 }]);
+    await box.recipe("Pasta", ["*500g* spaghetti"]);
+    await box.weekMenu([["Pasta", "", ""]]);
+    await box.mode({ mode: "order placed", date: "2026-11-21" });
+
+    const result = await box.fill([{ recipe: "Pasta", line: "500g spaghetti", product: 1, packFraction: 1, kind: "Cupboard Ingredient" }]);
+
+    expect(result.code).toBe(0);
+    expect(quantities(await box.basket())).toEqual({ 1: 1 });
   });
 });

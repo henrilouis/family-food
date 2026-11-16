@@ -35,6 +35,8 @@ export type Match = {
   /** How much of one pack the line needs as written, for one dinner: "1 large onion" from a 1 kg bag ≈ 0.15. */
   packFraction?: number;
   kind?: Kind;
+  /** The AH product's title, for the shopping list when AH can't be read ("AH Rode linzen 500 g"). */
+  title?: string;
 };
 
 /** What `food basket fill` reads: the skill's matches, and the Cupboard Ingredients at home (webshop ids). */
@@ -43,13 +45,25 @@ export type BasketInput = { lines: Match[]; haveAtHome?: number[] };
 /** The skill's list doesn't fit the Week Menu; printed without a stack trace. */
 export class BasketInputError extends Error {}
 
+/** Where a product goes in the shopping list: Fresh or Cupboard Ingredients for a Recipe, Staples when only a Staple needs it. */
+export type ShoppingGroup = "Fresh" | "Cupboard Ingredients" | "Staples";
+
+export type PlannedProduct = {
+  id: number;
+  quantity: number;
+  covers: string[];
+  /** From the skill's list or Staples.md; null when neither gives one. */
+  title: string | null;
+  group: ShoppingGroup;
+};
+
 /** What the Week Menu needs from AH, before looking at Mijn lijst. */
 export type BasketPlan = {
   weekStart: string;
   /** The Week Menu note. */
   file: string;
   /** Whole packs per product, and the ingredients and Staples each covers. */
-  products: { id: number; quantity: number; covers: string[] }[];
+  products: PlannedProduct[];
   /** Ingredients with no AH product, as free-text notes for Mijn lijst: "lime leaves (25)". */
   notes: string[];
   /** Optional lines, not bought: "Tacos: 8 tortilla wraps (optional)". */
@@ -83,8 +97,10 @@ export async function planBasket(vault: string, weekStart: string, input: Basket
 
   const problems: string[] = [];
   const used = new Set<Match>();
-  const products = new Map<number, { total: number; fresh: boolean; covers: string[] }>();
-  const product = (id: number) => products.get(id) ?? products.set(id, { total: 0, fresh: true, covers: [] }).get(id)!;
+  type Sum = { total: number; fresh: boolean; recipe: boolean; covers: string[]; title: string | null };
+  const products = new Map<number, Sum>();
+  const product = (id: number) =>
+    products.get(id) ?? products.set(id, { total: 0, fresh: true, recipe: false, covers: [], title: null }).get(id)!;
   const notes = new Map<string, { name: string; amounts: Map<string, number> }>();
   const optional = new Set<string>();
   const haveAtHome = new Set<string>();
@@ -131,6 +147,8 @@ export async function planBasket(vault: string, weekStart: string, input: Basket
       const sum = product(match.product);
       sum.total += match.packFraction * count;
       sum.fresh &&= match.kind === "Fresh";
+      sum.recipe = true;
+      sum.title ??= match.title ?? null;
       addOnce(sum.covers, name);
     }
   }
@@ -142,13 +160,20 @@ export async function planBasket(vault: string, weekStart: string, input: Basket
   for (const staple of await staplesThisWeek(vault, note)) {
     const sum = product(staple.product);
     sum.total += staple.quantity;
+    sum.title ??= staple.title;
     addOnce(sum.covers, `${staple.name} (Staple)`);
   }
 
   return {
     weekStart,
     file: note.file,
-    products: [...products].map(([id, { total, fresh, covers }]) => ({ id, quantity: wholePacks(total, fresh), covers })),
+    products: [...products].map(([id, { total, fresh, recipe, covers, title }]) => ({
+      id,
+      quantity: wholePacks(total, fresh),
+      covers,
+      title,
+      group: !recipe ? "Staples" : fresh ? "Fresh" : "Cupboard Ingredients",
+    })),
     notes: [...notes.values()].map(({ name, amounts }) =>
       amounts.size ? `${name} (${[...amounts].map(([unit, q]) => [number(q), unit].filter(Boolean).join(" ")).join(" + ")})` : name,
     ),
@@ -158,7 +183,7 @@ export async function planBasket(vault: string, weekStart: string, input: Basket
   };
 }
 
-type Staple = { name: string; product: number; quantity: number; kind: "Weekly" | "Ask" };
+type Staple = { name: string; product: number; title: string; quantity: number; kind: "Weekly" | "Ask" };
 
 /**
  * The Staples this week's Basket gets: the Weekly Staples, changed by the Week Menu's `## Staples this week`:
@@ -206,7 +231,8 @@ async function readStaples(vault: string): Promise<Staple[]> {
     if (!product) throw new NoteError(note.file, `the Staple "${row.staple}" has no AH product id in brackets`);
     if (!row.quantity || !Number.isFinite(quantity) || quantity < 0) throw new NoteError(note.file, `the Staple "${row.staple}" has no quantity`);
     if (kind !== "weekly" && kind !== "ask") throw new NoteError(note.file, `the Staple "${row.staple}" is neither Weekly nor Ask`);
-    return { name: row.staple, product: Number(product[1]), quantity, kind: kind === "weekly" ? "Weekly" : "Ask" };
+    const title = row["ah product"].replace(/\s*\(\d+\)\s*$/, "");
+    return { name: row.staple, product: Number(product[1]), title, quantity, kind: kind === "weekly" ? "Weekly" : "Ask" };
   });
 }
 
@@ -263,115 +289,205 @@ function number(q: number): string {
   return String(Number(q.toFixed(2)));
 }
 
-/** What `food basket fill` did. */
-export type BasketResult = {
-  plan: BasketPlan;
-  /**
-   * The plan's products, with what this run added (`added`: the difference with the earlier run's record),
-   * what Mijn lijst had before (`before`, 0 when new) and AH's title and pack price.
-   */
-  products: { id: number; title: string; quantity: number; added: number; before: number; price: number | null; covers: string[] }[];
-  /** The free-text notes this run added: the plan's notes an earlier run hadn't added. */
-  addedNotes: string[];
-  /** What an earlier run added that the Week Menu no longer needs and is still in Mijn lijst: for a human to remove. */
-  noLongerNeeded: { products: { id: number; title: string; quantity: number }[]; notes: string[] };
-  /** Mijn lijst's estimated total after adding, from the prices AH gives. */
-  total: number;
+/**
+ * What the Week Menu needs beyond what an earlier run recorded in `## Basket` (`add`, `addNotes`; quantities are
+ * the difference), and what that run added that is no longer needed (`remove`, `removeNotes`).
+ */
+export type BasketChange = {
+  add: PlannedProduct[];
+  addNotes: string[];
+  remove: { id: number; title: string; quantity: number }[];
+  removeNotes: string[];
 };
+
+function changeSince(plan: BasketPlan): BasketChange {
+  const { recorded } = plan;
+  const recordedQuantity = (id: number) => recorded.products.find((p) => p.id === id)?.quantity ?? 0;
+  const plannedQuantity = (id: number) => plan.products.find((p) => p.id === id)?.quantity ?? 0;
+  return {
+    add: plan.products.map((p) => ({ ...p, quantity: p.quantity - recordedQuantity(p.id) })).filter((p) => p.quantity > 0),
+    addNotes: plan.notes.filter((note) => !recorded.notes.includes(note)),
+    remove: recorded.products.map((p) => ({ ...p, quantity: p.quantity - plannedQuantity(p.id) })).filter((p) => p.quantity > 0),
+    removeNotes: recorded.notes.filter((note) => !plan.notes.includes(note)),
+  };
+}
+
+/** A product of the plan once Mijn lijst is filled: what this run added, what Mijn lijst had before (0 when new), AH's title and pack price. */
+export type FilledProduct = PlannedProduct & { title: string; added: number; before: number; price: number | null };
+
+/** What `food basket fill` did. */
+export type BasketOutcome =
+  /**
+   * Mijn lijst is filled. `change` only holds removals still possible: what is still in Mijn lijst.
+   * `total` is Mijn lijst's estimated total after adding, from the prices AH gives.
+   */
+  | { kind: "filled"; plan: BasketPlan; change: BasketChange; products: FilledProduct[]; total: number }
+  /** The coming Saturday's order is placed: nothing was written to AH. */
+  | { kind: "order placed"; plan: BasketPlan; change: BasketChange; order: { id: number; status: string } };
 
 /**
  * Adds to Mijn lijst what the plan needs beyond what an earlier run recorded: products merge into lines already
  * there, unmatched items go in as free-text notes. Never removes anything; what is no longer needed is only listed.
+ * Writes nothing once the coming Saturday's order is placed.
  */
-export async function fillBasket(plan: BasketPlan, gateway: AhGateway): Promise<BasketResult> {
-  const { recorded } = plan;
-  const recordedQuantity = (id: number) => recorded.products.find((p) => p.id === id)?.quantity ?? 0;
+export async function fillBasket(plan: BasketPlan, gateway: AhGateway): Promise<BasketOutcome> {
+  const change = changeSince(plan);
+  const order = await gateway.placedOrder(plan.weekStart);
+  if (order) return { kind: "order placed", plan, change, order };
+
   const before = await gateway.readBasket();
   const additions = {
-    products: plan.products
-      .map(({ id, quantity }) => ({ id, quantity: quantity - recordedQuantity(id) }))
-      .filter((p) => p.quantity > 0),
-    notes: plan.notes.filter((note) => !recorded.notes.includes(note)).map((description) => ({ description, quantity: 1 })),
+    products: change.add.map(({ id, quantity }) => ({ id, quantity })),
+    notes: change.addNotes.map((description) => ({ description, quantity: 1 })),
   };
   const after = additions.products.length || additions.notes.length ? await gateway.addToBasket(additions) : before;
   const inList = (id: number) => before.products.find((p) => p.id === id)?.quantity ?? 0;
   return {
+    kind: "filled",
     plan,
-    products: plan.products.map(({ id, quantity, covers }) => {
-      const line = after.products.find((p) => p.id === id);
-      return {
-        id,
-        quantity,
-        covers,
-        title: line?.title ?? recorded.products.find((p) => p.id === id)?.title ?? `product ${id}`,
-        price: line?.price ?? null,
-        added: additions.products.find((p) => p.id === id)?.quantity ?? 0,
-        before: inList(id),
-      };
-    }),
-    addedNotes: additions.notes.map((n) => n.description),
-    noLongerNeeded: {
-      products: recorded.products
-        .map(({ id, title, quantity }) => ({
-          id,
-          title,
-          quantity: Math.min(quantity - (plan.products.find((p) => p.id === id)?.quantity ?? 0), inList(id)),
-        }))
-        .filter((p) => p.quantity > 0),
-      notes: recorded.notes.filter((note) => !plan.notes.includes(note) && before.notes.some((n) => n.description === note)),
+    change: {
+      ...change,
+      remove: change.remove.map((p) => ({ ...p, quantity: Math.min(p.quantity, inList(p.id)) })).filter((p) => p.quantity > 0),
+      removeNotes: change.removeNotes.filter((note) => before.notes.some((n) => n.description === note)),
     },
+    products: plan.products.map((p) => ({
+      ...p,
+      title: after.products.find((line) => line.id === p.id)?.title ?? titleOf(plan, p),
+      price: after.products.find((line) => line.id === p.id)?.price ?? null,
+      added: change.add.find((a) => a.id === p.id)?.quantity ?? 0,
+      before: inList(p.id),
+    })),
     total: after.products.reduce((sum, p) => sum + (p.price ?? 0) * p.quantity, 0),
   };
 }
 
+/** A product's title without AH: from an earlier run's record, the skill's list or Staples.md. */
+function titleOf(plan: BasketPlan, product: PlannedProduct): string {
+  return plan.recorded.products.find((p) => p.id === product.id)?.title ?? product.title ?? `product ${product.id}`;
+}
+
 /**
- * Records what was added in the Week Menu's `## Basket` section, replacing an earlier one:
+ * Records what Mijn lijst got for the week in the Week Menu's `## Basket` section, replacing an earlier one:
  * "- <AH title> (id <webshop id>) ×<packs>: <ingredients covered>", "- Note: <free-text note>", "Have at home: …".
+ * Only once Mijn lijst is filled; otherwise the note is left as it is.
  */
-export async function writeBasketSection(result: BasketResult): Promise<void> {
-  const { plan } = result;
-  const lines = [
+export async function writeBasketSection(outcome: BasketOutcome): Promise<void> {
+  if (outcome.kind !== "filled") return;
+  const { plan } = outcome;
+  await replaceSection(plan.file, [
     `## ${BASKET_HEADING}`,
-    ...result.products.map((p) => `- ${p.title} (id ${p.id}) ×${p.quantity}: ${p.covers.join(", ")}`),
+    ...outcome.products.map((p) => `- ${p.title} (id ${p.id}) ×${p.quantity}: ${p.covers.join(", ")}`),
     ...plan.notes.map((note) => `- Note: ${note}`),
     `Have at home: ${plan.haveAtHome.join(", ") || "none"}`,
-  ];
-  const text = (await readFile(plan.file, "utf8")).replace(/\r\n/g, "\n");
+  ]);
+}
+
+/** Puts `lines` (starting with the `## Basket` heading) in place of the note's `## Basket` section, or at its end. */
+async function replaceSection(file: string, lines: string[]): Promise<void> {
+  const text = (await readFile(file, "utf8")).replace(/\r\n/g, "\n");
   const all = text.split("\n");
   const start = all.findIndex((l) => sameName(l.trim(), `## ${BASKET_HEADING}`));
   if (start < 0) {
-    await writeFile(plan.file, `${text.trimEnd()}\n\n${lines.join("\n")}\n`);
+    await writeFile(file, `${text.trimEnd()}\n\n${lines.join("\n")}\n`);
     return;
   }
   const end = all.findIndex((l, i) => i > start && /^##\s/.test(l));
   const rest = end < 0 ? [] : ["", ...all.slice(end)];
-  await writeFile(plan.file, `${[...all.slice(0, start), ...lines, ...rest].join("\n").trimEnd()}\n`);
+  await writeFile(file, `${[...all.slice(0, start), ...lines, ...rest].join("\n").trimEnd()}\n`);
 }
 
-/** The report for the person filling the Basket; it ends with the checkout reminder. */
-export function formatReport(result: BasketResult): string {
-  const { plan, noLongerNeeded } = result;
-  const euro = (amount: number) => `€${amount.toFixed(2)}`;
-  const added = result.products.filter((p) => p.added > 0 && p.before === 0);
-  const alreadyThere = result.products.filter((p) => p.added > 0 && p.before > 0);
+/** The exit code for `food basket fill`: 2 when nothing was written to AH and a human must act on the output. */
+export function exitCode(outcome: BasketOutcome): number {
+  return outcome.kind === "filled" ? 0 : 2;
+}
+
+/** What to tell the person filling the Basket. */
+export function formatReport(outcome: BasketOutcome): string {
+  switch (outcome.kind) {
+    case "filled":
+      return formatFilled(outcome);
+    case "order placed":
+      return [
+        `The order for ${saturday(outcome.plan.weekStart)} is already placed, so nothing was added to Mijn lijst.\n`,
+        formatLinks(outcome.change),
+        formatShoppingList(outcome.plan, outcome.change),
+      ].join("");
+  }
+}
+
+function formatFilled({ plan, change, products, total }: Extract<BasketOutcome, { kind: "filled" }>): string {
+  const added = products.filter((p) => p.added > 0 && p.before === 0);
+  const alreadyThere = products.filter((p) => p.added > 0 && p.before > 0);
   const unchanged = [
-    ...result.products.filter((p) => p.added === 0).map((p) => `${p.quantity} × ${p.title}`),
-    ...plan.notes.filter((note) => !result.addedNotes.includes(note)).map((note) => `Note: ${note}`),
+    ...products.filter((p) => p.added === 0).map((p) => `${p.quantity} × ${p.title}`),
+    ...plan.notes.filter((note) => !change.addNotes.includes(note)).map((note) => `Note: ${note}`),
   ];
   return [
     group("Added to Mijn lijst", added.map((p) => `${p.added} × ${p.title}${p.price === null ? "" : ` (${euro(p.price)} each)`}`)),
     group("Already in Mijn lijst, added on top", alreadyThere.map((p) => `${p.title}: ${p.before} + ${p.added} = ${p.before + p.added}`)),
     unchanged.length ? group("Added on an earlier run, unchanged", unchanged) : "",
     group("No longer needed, remove these from Mijn lijst by hand", [
-      ...noLongerNeeded.products.map((p) => `${p.quantity} × ${p.title}`),
-      ...noLongerNeeded.notes.map((note) => `Note: ${note}`),
+      ...change.remove.map((p) => `${p.quantity} × ${p.title}`),
+      ...change.removeNotes.map((note) => `Note: ${note}`),
     ]),
-    group("Unmatched, added as notes", result.addedNotes),
+    group("Unmatched, added as notes", change.addNotes),
     group("Optional, not added", plan.optional),
     `Have at home: ${plan.haveAtHome.join(", ") || "none"}\n`,
-    `Estimated total: ${euro(result.total)}\n`,
+    `Estimated total: ${euro(total)}\n`,
     "\nCheck out into the Saturday slot before Friday 12:00.\n",
   ].join("");
+}
+
+/** AH's own add-multiple links for the products to add, at most this many products per link (AH drops the rest). */
+const LINK_SIZE = 25;
+
+function formatLinks(change: BasketChange): string {
+  const links: string[] = [];
+  for (let i = 0; i < change.add.length; i += LINK_SIZE) {
+    const products = change.add.slice(i, i + LINK_SIZE);
+    links.push(`https://www.ah.nl/mijnlijst/add-multiple?${products.map((p) => `p=${p.id}:${p.quantity}`).join("&")}`);
+  }
+  return [
+    "Open each link in a browser where you are logged in to ah.nl: it adds its products to Mijn lijst\n",
+    "(once an order is placed, that is the order). Or shop from the list below.\n",
+    group("Links", links),
+    "\n",
+  ].join("");
+}
+
+/** The products to add and the unmatched items, grouped for shopping by hand. */
+function formatShoppingList(plan: BasketPlan, change: BasketChange): string {
+  return [
+    "Shopping list:\n",
+    shoppingList(plan, change).join("\n") + "\n",
+    group("Optional, not added", plan.optional),
+    `Have at home: ${plan.haveAtHome.join(", ") || "none"}\n`,
+  ].join("");
+}
+
+/** "Fresh:", "Cupboard Ingredients:", "Staples:" and "Unmatched:" with their items; empty groups left out. */
+function shoppingList(plan: BasketPlan, change: BasketChange): string[] {
+  const groups: ShoppingGroup[] = ["Fresh", "Cupboard Ingredients", "Staples"];
+  const item = (p: PlannedProduct) => {
+    const title = plan.recorded.products.find((r) => r.id === p.id)?.title ?? p.title;
+    return title ? `${p.quantity} × ${title}: ${p.covers.join(", ")}` : `${p.quantity} × ${p.covers.join(", ")}`;
+  };
+  return [
+    ...groups.map((name) => [name, change.add.filter((p) => p.group === name).map(item)] as const),
+    ["Unmatched", change.addNotes] as const,
+  ]
+    .filter(([, items]) => items.length)
+    .flatMap(([name, items]) => [`${name}:`, ...items.map((i) => `- ${i}`)]);
+}
+
+/** "Saturday 28 Nov" for a Week Menu's `week_start`. */
+function saturday(weekStart: string): string {
+  const options = { weekday: "long", day: "numeric", month: "short", timeZone: "UTC" } as const;
+  return new Date(`${weekStart}T00:00Z`).toLocaleDateString("en-GB", options);
+}
+
+function euro(amount: number): string {
+  return `€${amount.toFixed(2)}`;
 }
 
 /** A report group: "<heading>:" and one "- " line per item, or "<heading>: none". */

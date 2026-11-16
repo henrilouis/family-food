@@ -1,9 +1,11 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { AhError, type AhBasket, type AhBasketAdditions, type AhClient, type AhProduct } from "./client.ts";
+import { AhError, type AhBasket, type AhBasketAdditions, type AhClient, type AhOrder, type AhProduct } from "./client.ts";
 
 /** The fake's Mijn lijst in `basket.json`: products by webshop id, and free-text notes. */
 type FakeBasket = AhBasketAdditions;
+
+type Mode = { mode: "order placed"; date: string; status?: string };
 
 /**
  * The fake AH. Its state is plain JSON in `folder`, so tests can seed it:
@@ -13,6 +15,9 @@ type FakeBasket = AhBasketAdditions;
  *   titles and prices come from the catalogue
  * - `basket-requests.json`: every write it received, in order (`{ add: { products, notes } }`), so tests can
  *   check that nothing was ever removed
+ * - `mode.json`: how AH behaves; missing means all is well.
+ *   `{ "mode": "order placed", "date": "2026-11-28", "status": "SUBMITTED" }`: the order for delivery on `date`
+ *   is checked out (`status` defaults to SUBMITTED; REOPENED means reopened for changes)
  * Logging in needs no browser: it writes a made-up token to the token file, as the real login would,
  * and each renewal rotates the made-up refresh token.
  */
@@ -87,6 +92,11 @@ export function fakeAhClient(folder: string, tokenFile: string): AhClient {
       basket.notes.push(...additions.notes);
       await writeFile(path.join(folder, "basket.json"), JSON.stringify(basket, null, 2));
       return asAh(basket);
+    },
+    async openOrders(): Promise<AhOrder[]> {
+      const mode = await state<Mode | null>("mode.json", null);
+      if (mode?.mode !== "order placed") return [];
+      return [{ orderId: 1, delivery: { status: mode.status ?? "SUBMITTED", slot: { date: mode.date } } }];
     },
   };
 }

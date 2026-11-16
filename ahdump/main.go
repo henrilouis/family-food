@@ -7,6 +7,7 @@
 //	ahdump -auth <token file> search [-token anonymous|user] [-sort RELEVANCE|PURCHASE_FREQUENCY] [--] <query>
 //	ahdump -auth <token file> basket
 //	ahdump -auth <token file> basket-add < {"products": [{"id", "quantity"}], "notes": [{"description", "quantity"}]}
+//	ahdump -auth <token file> orders
 //	ahdump -auth <token file> history -out <folder>
 //
 // Exit codes: 0 done, 1 failed, 3 not logged in or AH refused the login (run login again).
@@ -36,6 +37,7 @@ commands:
   basket-add              add the products and free-text notes given as JSON on stdin to Mijn lijst
                           ({"products": [{"id", "quantity"}], "notes": [{"description", "quantity"}]}),
                           then print Mijn lijst; quantities add to what is there, nothing is removed
+  orders                  print the open orders (checked out or reopened) with their delivery slot as JSON
   history -out <folder>   pull closed online orders and in-store receipts into a folder`
 
 // errLogin means the user token is missing or AH refused it.
@@ -81,6 +83,11 @@ func main() {
 		}
 	case "basket-add":
 		err = basketAdd(ctx, ah)
+	case "orders":
+		var orders []byte
+		if orders, err = ah.openOrders(ctx); err == nil {
+			err = printJSON(json.RawMessage(orders))
+		}
 	case "history":
 		err = history(ctx, ah, args)
 	default:

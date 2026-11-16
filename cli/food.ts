@@ -2,7 +2,7 @@
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { AhError, ahGateway, parseAmount } from "./adapters/ah/gateway.ts";
-import { BasketInputError, fillBasket, formatReport, planBasket, readBasketInput, writeBasketSection } from "./basket.ts";
+import { BasketInputError, exitCode, fillBasket, formatReport, planBasket, readBasketInput, writeBasketSection } from "./basket.ts";
 import { AppleNotesError, familyNotes, FOOD_WISHES, RECIPES_TO_ADD, type Deletion } from "./adapters/apple-notes/notes.ts";
 import { buildBundle } from "./build-bundle.ts";
 import { writeBundleFiles } from "./bundle-files.ts";
@@ -215,9 +215,10 @@ async function basket(args: string[]): Promise<void> {
   const { values, positionals } = parseArgs({ args: rest, allowPositionals: true, options: { week: { type: "string" } } });
   if (positionals.length !== 1 || !values.week) throw new UsageError(usage);
   const plan = await planBasket(await vaultPath(), values.week, await readBasketInput(positionals[0]));
-  const result = await fillBasket(plan, ahGateway(await readConfig()));
-  await writeBasketSection(result);
-  process.stdout.write(formatReport(result));
+  const outcome = await fillBasket(plan, ahGateway(await readConfig()));
+  await writeBasketSection(outcome);
+  process.stdout.write(formatReport(outcome));
+  process.exitCode = exitCode(outcome);
 }
 
 main(process.argv.slice(2)).catch((error) => {
