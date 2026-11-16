@@ -2,14 +2,16 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { Ingredient, IngredientGroup, MenuDay, Recipe, WeekMenu } from "../bundle/bundle.ts";
-import { addDays } from "../bundle/kitchen-day.ts";
-import { parseAmount } from "./amount.ts";
+import { addDays } from "../bundle/dates.ts";
+import { parseRecipeAmount } from "./amount.ts";
 import { ingredientWords, markStep } from "./step.ts";
+import { UserError } from "./user-error.ts";
 
-const WEEK_MENUS = "Week menus";
+/** The vault folder of the Week Menu notes. */
+export const WEEK_MENUS = "Week menus";
 
-/** A problem with the Recipe Vault's contents, reported to the user without a stack trace. */
-export class VaultError extends Error {}
+/** A problem with the Recipe Vault's contents. */
+export class VaultError extends UserError {}
 
 /** A problem in one note, which `food vault check` can report next to the others. */
 export class NoteError extends VaultError {
@@ -64,12 +66,16 @@ export async function readNotes(dir: string): Promise<Note[]> {
 export function parseWeekMenu(note: Note): WeekMenu {
   const weekStart = weekStartOf(note);
   const days = dayTable(note).map((row): MenuDay => {
-    const dinner = /^free day$/i.test(row.dinner ?? "") ? null : linkTarget(row.dinner ?? "");
+    const cell = row.dinner ?? "";
+    const freeDay = /^free day$/i.test(cell);
+    const dinner = freeDay ? null : linkTarget(cell);
+    const unlinkedDinner = freeDay || dinner ? "" : plainText(cell);
     const noteCell = row.note ?? "";
     return {
       date: addDays(weekStart, weekdayOffset(note.file, row.day ?? "")),
       dinner,
-      side: dinner ? linkTarget(row.side ?? "") : null,
+      ...(unlinkedDinner ? { unlinkedDinner } : {}),
+      side: dinner || unlinkedDinner ? linkTarget(row.side ?? "") : null,
       novel: /\bnovel\b/i.test(noteCell),
       double: /double:\s*cook/i.test(noteCell) ? "cook" : /double:\s*2nd day/i.test(noteCell) ? "second" : null,
     };
@@ -108,6 +114,15 @@ export function tableRows(note: Note, column: string): Record<string, string>[] 
     rows.push(Object.fromEntries(header.map((h, i) => [h, values[i] ?? ""])));
   }
   return rows;
+}
+
+/** The lines under a note's `## <heading>`, up to the next `## ` heading; none when it has no such section. */
+export function sectionLines(note: Note, heading: string): string[] {
+  const lines = note.body.split("\n");
+  const start = lines.findIndex((l) => l.trim().toLowerCase() === `## ${heading.toLowerCase()}`);
+  if (start < 0) return [];
+  const end = lines.findIndex((l, i) => i > start && /^##\s/.test(l));
+  return lines.slice(start + 1, end < 0 ? undefined : end);
 }
 
 /** The note name a cell's wikilink points at: "[[Meals/Dahl#Method|the dahl]]" → "Dahl". */
@@ -179,7 +194,7 @@ export function parseRecipe(name: string, note: Note): Recipe {
   const vocabulary = ingredientWords(recipe.ingredients);
   recipe.method = steps.map((step) =>
     markStep(plainText(step), vocabulary, (amount) => {
-      const parsed = parseAmount(amount);
+      const parsed = parseRecipeAmount(amount);
       if (!parsed) throw new NoteError(note.file, `the amount "${amount}" in the Method step "${step}" doesn't start with a number`);
       return parsed;
     }),
@@ -191,7 +206,7 @@ export function parseRecipe(name: string, note: Note): Recipe {
 function parseIngredient(file: string, line: string): Ingredient {
   const italic = line.match(/^\*([^*]+)\*\s*(.*)$/);
   if (!italic) return { amount: null, text: plainText(line) };
-  const amount = parseAmount(italic[1]);
+  const amount = parseRecipeAmount(italic[1]);
   if (!amount) throw new NoteError(file, `the amount "${italic[1]}" in "${line}" doesn't start with a number`);
   return { amount, text: plainText(italic[2]) };
 }

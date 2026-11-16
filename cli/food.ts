@@ -1,22 +1,26 @@
 #!/usr/bin/env node
-import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { AhError, ahGateway, allerhandeRecipeId, parseAmount } from "./adapters/ah/gateway.ts";
-import { BasketInputError, exitCode, fillBasket, formatReport, planBasket, readBasketInput, writeBasketSection } from "./basket.ts";
-import { AppleNotesError, familyNotes, FOOD_WISHES, RECIPES_TO_ADD, type Deletion } from "./adapters/apple-notes/notes.ts";
+import { allerhandeRecipeId } from "./adapters/ah/allerhande.ts";
+import { ahGateway } from "./adapters/ah/gateway.ts";
+import { familyNotes, FOOD_WISHES, RECIPES_TO_ADD, type Deletion } from "./adapters/apple-notes/notes.ts";
+import { parseMeasure } from "./amount.ts";
+import { exitCode, fillBasket } from "./basket/fill.ts";
+import { planBasket, readBasketInput } from "./basket/quantities.ts";
+import { formatReport } from "./basket/report.ts";
+import { writeBasketSection } from "./basket/section.ts";
 import { buildBundle, publishedWeekMenusWith } from "./build-bundle.ts";
 import { writeBundleFiles } from "./bundle-files.ts";
 import { checkVault, formatCheck } from "./check.ts";
 import { readConfig, writeConfig } from "./config.ts";
-import { fetchRecipePage, RecipePageError, RecipePageRefused } from "./recipe-page.ts";
-import { DisplayTargetError } from "./adapters/display-target.ts";
-import { deploy, DeployRefused } from "./deploy.ts";
-import { deleteRecipe, planContext, PlanInputError, recordVerdict, siteTrackRecord, writeWeekMenu, type WeekPlan } from "./plan.ts";
+import { deploy } from "./deploy.ts";
+import { readJsonFile } from "./json-file.ts";
 import { listBasketLines, PinInputError, pinProducts, type PinnedProduct } from "./pinned-products.ts";
+import { deleteRecipe, planContext, recordVerdict, siteTrackRecord, writeWeekMenu, type LockedWeekMenu } from "./plan.ts";
 import { preview } from "./preview.ts";
 import { publish, UNREACHABLE_MESSAGE } from "./publish.ts";
-import { VaultError } from "./vault.ts";
+import { fetchRecipePage, RecipePageError, RecipePageRefused } from "./recipe-page.ts";
+import { UserError } from "./user-error.ts";
 
 const usage = `Usage: food <command>
 
@@ -53,13 +57,13 @@ Commands:
   basket lines --week <YYYY-MM-DD>
                         The ingredient lines of the Recipes a Locked Week Menu buys (JSON): recipe, line,
                         ingredient, times (dinners), optional, the Pinned Product from Products.md, and for
-                        pinned lines the ready "match" for basket fill (packFraction null when the line's
+                        pinned lines its ready Match ("match") for basket fill (packFraction null when the line's
                         amount and the Pack don't compare)
   products pin <pins.json>
-                        Add confirmed matches to Products.md ([{ingredient, product, title, pack, kind}];
+                        Pin the products of confirmed Matches in Products.md ([{ingredient, product, title, pack, kind}];
                         product null for none); a pin for an ingredient already there replaces its row
   basket fill --week <YYYY-MM-DD> <matches.json>
-                        Fill Mijn lijst for a Locked Week Menu from the fill-basket skill's matches
+                        Fill Mijn lijst for a Locked Week Menu from the fill-basket skill's Matches
                         ({"lines": [{recipe, line, product, packFraction, kind}], "haveAtHome": [ids]}):
                         Doubles ×2, Staples added, summed and rounded to whole packs, unmatched lines as
                         notes. Never removes anything. Writes the Week Menu's ## Basket section and a report.
@@ -96,15 +100,19 @@ Commands:
                         Record the verdict on that Week Menu's Novel Recipe; kept or rejected clears its novel
   plan sites            Each recipe site's track record (JSON): its Novel Recipes kept, rejected and not cooked
                         (from the Week Menus) and the Meals whose source is on it
-  plan write <plan.json>
-                        Write a Locked Week Menu note from the planning-session skill's plan
+  plan write <week-menu.json>
+                        Write a Locked Week Menu note from the planning-session skill's JSON
                         ({weekStart, novelSource, days: [7 × {dinner, side, novel, double: "cook"|"second"}],
                         staples: ["Skip: milk ×1"], notes: [...]}); refuses when the note is already there
   deploy                Set up, update or repair the Kitchen Display Pi (ssh host \`kitchen\`)
                         from a clean main that matches origin
 `;
 
-class UsageError extends Error {}
+class UsageError extends UserError {}
+
+const print = (text: string) => process.stdout.write(text);
+const printLines = (lines: string[]) => print(lines.map((line) => line + "\n").join(""));
+const printJson = (value: unknown) => print(JSON.stringify(value, null, 2) + "\n");
 
 const now = () => (process.env.FOOD_NOW ? new Date(process.env.FOOD_NOW) : new Date());
 
@@ -120,7 +128,7 @@ async function main(args: string[]): Promise<void> {
     case "config": {
       const [key, value] = rest;
       if (key === undefined) {
-        process.stdout.write(JSON.stringify(await readConfig(), null, 2) + "\n");
+        printJson(await readConfig());
         return;
       }
       if (key !== "vault" || !value) throw new UsageError(usage);
@@ -135,7 +143,8 @@ async function main(args: string[]): Promise<void> {
         options: { published: { type: "boolean", default: false }, json: { type: "boolean", default: false } },
       });
       const check = await checkVault(await vaultPath(), { publishing: values.published ? now() : undefined });
-      process.stdout.write(values.json ? JSON.stringify(check, null, 2) + "\n" : formatCheck(check));
+      if (values.json) printJson(check);
+      else print(formatCheck(check));
       if (check.errors.length > 0) process.exitCode = 1;
       return;
     }
@@ -143,7 +152,7 @@ async function main(args: string[]): Promise<void> {
       const { values } = parseArgs({ args: rest, options: { out: { type: "string" } } });
       const bundle = await buildBundle(await vaultPath(), now());
       if (values.out) await writeBundleFiles(path.resolve(values.out), bundle);
-      else process.stdout.write(JSON.stringify(bundle, null, 2) + "\n");
+      else printJson(bundle);
       return;
     }
     case "preview": {
@@ -157,10 +166,10 @@ async function main(args: string[]): Promise<void> {
       return;
     }
     case "deploy":
-      await deploy((line) => line && process.stdout.write(line + "\n"));
+      await deploy((line) => line && printLines([line]));
       return;
     case "publish":
-      if (!(await publish(await vaultPath(), now(), (line) => process.stdout.write(line + "\n")))) process.exitCode = 1;
+      if (!(await publish(await vaultPath(), now(), (line) => printLines([line])))) process.exitCode = 1;
       return;
     case "ah":
       return ah(rest);
@@ -182,15 +191,9 @@ async function main(args: string[]): Promise<void> {
 async function products(args: string[]): Promise<void> {
   const [command, ...rest] = args;
   if (command !== "pin" || rest.length !== 1) throw new UsageError(usage);
-  let pins: PinnedProduct[];
-  try {
-    pins = JSON.parse(await readFile(path.resolve(rest[0]), "utf8"));
-  } catch (error) {
-    throw new PinInputError(`${rest[0]} is not a JSON list of pins: ${(error as Error).message}`);
-  }
+  const pins = await readJsonFile(rest[0], "a JSON list of pins");
   if (!Array.isArray(pins)) throw new PinInputError(`${rest[0]}: expected a JSON list of pins`);
-  const done = await pinProducts(await vaultPath(), pins);
-  process.stdout.write(done.map((line) => line + "\n").join(""));
+  printLines(await pinProducts(await vaultPath(), pins as PinnedProduct[]));
 }
 
 async function plan(args: string[]): Promise<void> {
@@ -198,28 +201,22 @@ async function plan(args: string[]): Promise<void> {
   switch (command) {
     case "context":
       if (rest.length > 0) throw new UsageError(usage);
-      process.stdout.write(JSON.stringify(await planContext(await vaultPath(), now()), null, 2) + "\n");
+      printJson(await planContext(await vaultPath(), now()));
       return;
     case "sites":
       if (rest.length > 0) throw new UsageError(usage);
-      process.stdout.write(JSON.stringify(await siteTrackRecord(await vaultPath()), null, 2) + "\n");
+      printJson(await siteTrackRecord(await vaultPath()));
       return;
     case "verdict": {
       const [week, ...verdict] = rest;
       if (!week || verdict.length === 0) throw new UsageError(usage);
-      const done = await recordVerdict(await vaultPath(), week, verdict.join(" "));
-      process.stdout.write(done.map((line) => line + "\n").join(""));
+      printLines(await recordVerdict(await vaultPath(), week, verdict.join(" ")));
       return;
     }
     case "write": {
       if (rest.length !== 1) throw new UsageError(usage);
-      let weekPlan: WeekPlan;
-      try {
-        weekPlan = JSON.parse(await readFile(path.resolve(rest[0]), "utf8"));
-      } catch (error) {
-        throw new PlanInputError(`${rest[0]} is not a JSON plan: ${(error as Error).message}`);
-      }
-      process.stdout.write(`Wrote ${await writeWeekMenu(await vaultPath(), weekPlan)}\n`);
+      const weekMenu = (await readJsonFile(rest[0], "a JSON Week Menu")) as LockedWeekMenu;
+      printLines([`Wrote ${await writeWeekMenu(await vaultPath(), weekMenu)}`]);
       return;
     }
     default:
@@ -233,7 +230,8 @@ async function notes(args: string[]): Promise<void> {
   const { values, positionals } = parseArgs({ args: rest, allowPositionals: true, options: { json: { type: "boolean", default: false } } });
   const [action, ...items] = positionals;
   const report = (name: string, deletion: Deletion) => {
-    process.stdout.write(values.json ? JSON.stringify(deletion, null, 2) + "\n" : formatDeletion(name, deletion));
+    if (values.json) printJson(deletion);
+    else printLines(formatDeletion(name, deletion));
     // 2: Notes wouldn't take the change; the skills fall back to reading only and list `deleteByHand` for an adult.
     if (deletion.deleteByHand.length > 0) process.exitCode = 2;
   };
@@ -242,14 +240,16 @@ async function notes(args: string[]): Promise<void> {
       if (action === "delete" && items.length > 0) return report(FOOD_WISHES, await family.deleteWishes(items));
       if (action !== undefined) throw new UsageError(usage);
       const wishes = await family.wishes();
-      process.stdout.write(values.json ? JSON.stringify(wishes, null, 2) + "\n" : wishes.map((wish) => wish + "\n").join(""));
+      if (values.json) printJson(wishes);
+      else printLines(wishes);
       return;
     }
     case "recipes-to-add": {
       if (action === "remove" && items.length > 0) return report(RECIPES_TO_ADD, await family.removeRecipesToAdd(items));
       if (action !== undefined) throw new UsageError(usage);
       const recipes = await family.recipesToAdd();
-      process.stdout.write(values.json ? JSON.stringify(recipes, null, 2) + "\n" : recipes.map((item) => item + "\n\n").join(""));
+      if (values.json) printJson(recipes);
+      else printLines(recipes.map((item) => item + "\n"));
       return;
     }
     default:
@@ -257,7 +257,7 @@ async function notes(args: string[]): Promise<void> {
   }
 }
 
-function formatDeletion(note: string, { deleted, notFound, deleteByHand, error }: Deletion): string {
+function formatDeletion(note: string, { deleted, notFound, deleteByHand, error }: Deletion): string[] {
   const lines = [
     ...deleted.map((item) => `Deleted from ${note}: ${item}`),
     ...notFound.map((item) => `Not in ${note}: ${item}`),
@@ -266,7 +266,7 @@ function formatDeletion(note: string, { deleted, notFound, deleteByHand, error }
     lines.push(`Could not change the Apple Note "${note}": ${error}`, `Please delete these from "${note}" by hand:`);
     lines.push(...deleteByHand.map((item) => `- ${item.replace(/\n/g, "\n  ")}`));
   }
-  return lines.map((line) => line + "\n").join("");
+  return lines;
 }
 
 async function recipe(args: string[]): Promise<void> {
@@ -277,18 +277,17 @@ async function recipe(args: string[]): Promise<void> {
       if (positionals.length !== 1) throw new UsageError(usage);
       const [name] = positionals;
       const weekMenus = await publishedWeekMenusWith(await vaultPath(), name, now());
-      if (values.json) process.stdout.write(JSON.stringify({ recipe: name, weekMenus }) + "\n");
-      else if (weekMenus.length === 0) process.stdout.write(`${name} isn't on a published Week Menu: no Publish needed.\n`);
+      if (values.json) print(JSON.stringify({ recipe: name, weekMenus }) + "\n");
+      else if (weekMenus.length === 0) printLines([`${name} isn't on a published Week Menu: no Publish needed.`]);
       else {
         const menus = weekMenus.length === 1 ? `Week Menu of ${weekMenus[0]}` : `Week Menus of ${weekMenus.join(", ")}`;
-        process.stdout.write(`${name} is on the published ${menus}: run \`food publish\`.\n`);
+        printLines([`${name} is on the published ${menus}: run \`food publish\`.`]);
       }
       return;
     }
     case "delete": {
       if (rest.length !== 1) throw new UsageError(usage);
-      const done = await deleteRecipe(await vaultPath(), rest[0]);
-      process.stdout.write(done.map((line) => line + "\n").join(""));
+      printLines(await deleteRecipe(await vaultPath(), rest[0]));
       return;
     }
     case "fetch": {
@@ -297,7 +296,7 @@ async function recipe(args: string[]): Promise<void> {
       const allerhande = allerhandeRecipeId(rest[0]);
       try {
         const page = allerhande === null ? await fetchRecipePage(rest[0]) : await ahGateway(await readConfig()).allerhandeRecipe(allerhande);
-        process.stdout.write(JSON.stringify(page, null, 2) + "\n");
+        printJson(page);
       } catch (error) {
         if (!(error instanceof RecipePageRefused || error instanceof RecipePageError)) throw error;
         process.stderr.write(error.message + "\n");
@@ -314,15 +313,14 @@ async function recipe(args: string[]): Promise<void> {
 async function ah(args: string[]): Promise<void> {
   const [command, ...rest] = args;
   const gateway = ahGateway(await readConfig());
-  const print = (value: unknown) => process.stdout.write(JSON.stringify(value, null, 2) + "\n");
   switch (command) {
     case "login":
       await gateway.login();
-      process.stdout.write("Logged in to AH.\n");
+      printLines(["Logged in to AH."]);
       return;
     case "refresh":
       await gateway.refreshLogin();
-      process.stdout.write("AH login renewed.\n");
+      printLines(["AH login renewed."]);
       return;
     case "search": {
       const { values, positionals } = parseArgs({
@@ -331,20 +329,20 @@ async function ah(args: string[]): Promise<void> {
         options: { need: { type: "string" } },
       });
       if (positionals.length === 0) throw new UsageError(usage);
-      const need = values.need === undefined ? undefined : parseAmount(values.need);
+      const need = values.need === undefined ? undefined : parseMeasure(values.need);
       if (need === null) {
         throw new UsageError(`--need must be an amount such as 400g, 1.5l or 3 (pieces), not "${values.need}"`);
       }
-      print(await gateway.searchProducts(positionals.join(" "), { need }));
+      printJson(await gateway.searchProducts(positionals.join(" "), { need }));
       return;
     }
     case "bought": {
       if (rest.length === 0) throw new UsageError(usage);
-      print(await gateway.searchPreviouslyBought(rest.join(" ")));
+      printJson(await gateway.searchPreviouslyBought(rest.join(" ")));
       return;
     }
     case "basket":
-      print(await gateway.readBasket());
+      printJson(await gateway.readBasket());
       return;
     case "recipes": {
       const { values, positionals } = parseArgs({
@@ -354,13 +352,13 @@ async function ah(args: string[]): Promise<void> {
       });
       const size = values.size === undefined ? undefined : Number(values.size);
       if (size !== undefined && !(Number.isInteger(size) && size > 0)) throw new UsageError(`--size must be a whole number, not "${values.size}"`);
-      print(await gateway.searchAllerhande({ text: positionals.join(" ") || undefined, season: values.season, cuisine: values.cuisine, size }));
+      printJson(await gateway.searchAllerhande({ text: positionals.join(" ") || undefined, season: values.season, cuisine: values.cuisine, size }));
       return;
     }
     case "suggestions": {
       const id = rest.length === 1 ? allerhandeRecipeId(rest[0]) : null;
       if (id === null) throw new UsageError(`Give one Allerhande recipe address (https://www.ah.nl/allerhande/recept/R-R<number>/…).`);
-      print(await gateway.allerhandeSuggestions(id));
+      printJson(await gateway.allerhandeSuggestions(id));
       return;
     }
     default:
@@ -373,23 +371,20 @@ async function basket(args: string[]): Promise<void> {
   if (command === "lines") {
     const { values, positionals } = parseArgs({ args: rest, allowPositionals: true, options: { week: { type: "string" } } });
     if (positionals.length !== 0 || !values.week) throw new UsageError(usage);
-    process.stdout.write(JSON.stringify(await listBasketLines(await vaultPath(), values.week), null, 2) + "\n");
+    printJson(await listBasketLines(await vaultPath(), values.week));
     return;
   }
   if (command !== "fill") throw new UsageError(usage);
   const { values, positionals } = parseArgs({ args: rest, allowPositionals: true, options: { week: { type: "string" } } });
   if (positionals.length !== 1 || !values.week) throw new UsageError(usage);
   const plan = await planBasket(await vaultPath(), values.week, await readBasketInput(positionals[0]));
-  const outcome = await fillBasket(plan, ahGateway(await readConfig()), (line) => process.stdout.write(line + "\n"));
+  const outcome = await fillBasket(plan, ahGateway(await readConfig()), (line) => printLines([line]));
   await writeBasketSection(outcome);
-  process.stdout.write(formatReport(outcome));
+  print(formatReport(outcome));
   process.exitCode = exitCode(outcome);
 }
 
 main(process.argv.slice(2)).catch((error) => {
-  const expected = [UsageError, VaultError, DeployRefused, DisplayTargetError, AhError, AppleNotesError, BasketInputError, PlanInputError, PinInputError].some(
-    (type) => error instanceof type,
-  );
-  process.stderr.write(expected ? error.message.trimEnd() + "\n" : `${error.stack ?? error}\n`);
+  process.stderr.write(error instanceof UserError ? error.message.trimEnd() + "\n" : `${error.stack ?? error}\n`);
   process.exitCode = 1;
 });

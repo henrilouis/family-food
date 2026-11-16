@@ -277,7 +277,19 @@ describe("food plan write", () => {
     expect(await read(vault, "Week menus/Week 2026-12-05.md")).toContain("## Staples this week\n\n## Notes\n");
   });
 
-  test("refuses a plan that doesn't make a Week Menu, writing nothing", async () => {
+  test("takes a chosen Staple that has no AH product, which Basket filling adds as a note", async () => {
+    const { run, vault } = await sandbox();
+    const staples = await read(vault, "Staples.md");
+    await writeFile(path.join(vault, "Staples.md"), `${staples.trimEnd()}\n| Tea | | 1 | Ask |\n`);
+
+    const result = await run(["plan", "write", await writePlan(vault, { ...plan, staples: ["Ask Staples: tea"] })]);
+
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(0);
+    expect(await read(vault, "Week menus/Week 2026-11-28.md")).toContain("## Staples this week\n- Ask Staples: tea\n");
+  });
+
+  test("refuses a Locked Week Menu that doesn't make a note, writing nothing", async () => {
     const { run, vault } = await sandbox();
     const refused = async (value: unknown) => {
       const result = await run(["plan", "write", await writePlan(vault, value)]);

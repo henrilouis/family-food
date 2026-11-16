@@ -1,7 +1,8 @@
 import { execFile } from "node:child_process";
 import { cp, mkdir, readdir, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { readConfig } from "../config.ts";
+import type { Config } from "../config.ts";
+import { UserError } from "../user-error.ts";
 
 /**
  * The Kitchen Display Pi as seen from the Mac: the SSH host `kitchen` serving the web root below with Caddy.
@@ -31,14 +32,14 @@ export const WEB_ROOT = "/srv/kitchen";
 const SETUP_DIR = "family-food-setup";
 
 /** Something on the Kitchen Display Pi failed; the message holds what it printed. */
-export class DisplayTargetError extends Error {}
+export class DisplayTargetError extends UserError {}
 
 /** The Pi could not be reached over SSH; nothing on it was changed by the step that failed. */
 export class DisplayTargetUnreachable extends DisplayTargetError {}
 
 /** The display target the local config asks for: the fake when `fakes["display-target"]` is set, else the Pi. */
-export async function displayTarget(): Promise<DisplayTarget> {
-  const fake = (await readConfig()).fakes?.["display-target"];
+export function displayTarget(config: Config): DisplayTarget {
+  const fake = config.fakes?.["display-target"];
   return fake ? new FakeDisplayTarget(fake) : new SshDisplayTarget(SSH_HOST);
 }
 

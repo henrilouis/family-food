@@ -35,8 +35,13 @@ export type WeekMenu = {
 export type MenuDay = {
   /** YYYY-MM-DD */
   date: string;
-  /** The Recipe's key in `recipes`; null on the Free Day. */
+  /** The Recipe's key in `recipes`; null on the Free Day, and for a dinner without a Recipe (`unlinkedDinner`). */
   dinner: string | null;
+  /**
+   * The dinner as the Week Menu writes it when that is plain text instead of a link to a Recipe: a 👎 Novel Recipe
+   * deleted from the Recipe Vault. Left out on other days. A page that doesn't know it shows the day as the Free Day.
+   */
+  unlinkedDinner?: string;
   /** The Side's key in `recipes`, if the dinner has one. */
   side: string | null;
   /** The dinner is this week's Novel Recipe. */

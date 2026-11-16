@@ -25,20 +25,21 @@ export async function publish(vault: string, now: Date, log: (line: string) => v
     return false;
   }
 
+  const config = await readConfig();
   const dir = await mkdtemp(path.join(os.tmpdir(), "food-release-"));
   try {
     const bundle = await buildBundle(vault, now);
     const version = await writeBundleFiles(dir, bundle);
     const release = releaseId(now);
     try {
-      await (await displayTarget()).publishRelease(dir, release);
+      await displayTarget(config).publishRelease(dir, release);
       log(`Kitchen Display updated (release ${release}, version ${version.hash.slice(0, 12)}).`);
     } catch (error) {
       if (!(error instanceof DisplayTargetUnreachable)) throw error;
       log(UNREACHABLE_MESSAGE);
     }
     try {
-      await writeThisWeek(await readConfig(), bundle, now);
+      await writeThisWeek(config, bundle, now);
       log("This week note updated.");
     } catch (error) {
       if (!(error instanceof AppleNotesError)) throw error;

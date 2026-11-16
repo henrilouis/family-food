@@ -1,6 +1,7 @@
 // The Kitchen Display's view logic: from a display bundle and the time, the deck of screens to show.
 import type { Amount, DisplayBundle, IngredientGroup, MenuDay, Recipe, Step, WeekMenu } from "../../bundle/bundle.ts";
-import { addDays, kitchenDate } from "../../bundle/kitchen-day.ts";
+import { addDays, dayLabel, timeLabel, weekdayName } from "../../bundle/dates.ts";
+import { kitchenDate } from "../../bundle/kitchen-day.ts";
 
 export type IngredientList = {
   heading: string | null;
@@ -10,7 +11,15 @@ export type IngredientList = {
 /** A Method step as plain text and bold ingredient spans ("300g" + "red split lentils"). */
 export type StepText = (string | { amount: string; ingredient: string })[];
 
-export type Screen = WeekScreen | IngredientsScreen | StepScreen | NotesScreen | LeftoversScreen | FreeDayScreen | MessageScreen;
+export type Screen =
+  | WeekScreen
+  | IngredientsScreen
+  | StepScreen
+  | NotesScreen
+  | DoubleSecondDayScreen
+  | FreeDayScreen
+  | RecipeGoneScreen
+  | MessageScreen;
 
 /** The Week Menu that covers today, one press back from today's ingredients. */
 export type WeekScreen = {
@@ -25,11 +34,11 @@ export type WeekRow = {
   /** e.g. "Mon 23 Nov" */
   day: string;
   today: boolean;
-  /** The dinner's title; null on the Free Day. */
+  /** The dinner's title, "<name> (deleted)" when its Recipe is gone from the Recipe Vault; null on the Free Day. */
   dinner: string | null;
   side: string | null;
   /** A Double's 2nd day, which eats the day before's dinner. */
-  leftovers: boolean;
+  doubleSecondDay: boolean;
   /** "New" on the Novel Recipe, "×2" on a Double cook day. */
   tags: string[];
 };
@@ -68,8 +77,8 @@ export type NotesScreen = {
 };
 
 /** A Double's 2nd day: nothing to cook, the day before's dinner is reheated. */
-export type LeftoversScreen = {
-  kind: "leftovers";
+export type DoubleSecondDayScreen = {
+  kind: "double-second-day";
   day: string;
   /** The dinner's title. */
   title: string;
@@ -86,6 +95,15 @@ export type FreeDayScreen = {
   message: string;
 };
 
+/** Tonight's dinner has no Recipe: a 👎 Novel Recipe deleted from the Recipe Vault. */
+export type RecipeGoneScreen = {
+  kind: "recipe-gone";
+  day: string;
+  /** The dinner as the Week Menu names it. */
+  title: string;
+  message: string;
+};
+
 /** No Week Menu covers today. */
 export type MessageScreen = {
   kind: "message";
@@ -97,17 +115,6 @@ export type Deck = {
   screens: Screen[];
   current: number;
 };
-
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-const weekdayName = (date: string): string => WEEKDAY_NAMES[new Date(`${date}T00:00:00Z`).getUTCDay()];
-
-function dayLabel(date: string): string {
-  const d = new Date(`${date}T00:00:00Z`);
-  return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
-}
 
 const FRACTIONS: [string, number][] = [["½", 1 / 2], ["¼", 1 / 4], ["¾", 3 / 4], ["⅓", 1 / 3], ["⅔", 2 / 3], ["⅛", 1 / 8]];
 
@@ -145,11 +152,20 @@ export function buildDeck(bundle: DisplayBundle, now: Date): Deck {
   const day = week?.days.find((d) => d.date === today);
   if (!week || !day) return { screens: [{ kind: "message", day: dayLabel(today), message: "No Week Menu yet" }], current: 0 };
   const weekAtAGlance = weekScreen(bundle, week, today);
+  if (!day.dinner && day.unlinkedDinner) {
+    const gone: RecipeGoneScreen = {
+      kind: "recipe-gone",
+      day: dayLabel(today),
+      title: day.unlinkedDinner,
+      message: "This Recipe isn't in the Recipe Vault any more",
+    };
+    return { screens: [weekAtAGlance, gone], current: 1 };
+  }
   if (!day.dinner) {
     const freeDay: FreeDayScreen = { kind: "free-day", day: dayLabel(today), title: "Free Day", message: "Nothing planned tonight" };
     return { screens: [weekAtAGlance, freeDay], current: 1 };
   }
-  if (day.double === "second") return { screens: [weekAtAGlance, leftoversScreen(bundle, day, day.dinner)], current: 1 };
+  if (day.double === "second") return { screens: [weekAtAGlance, doubleSecondDayScreen(bundle, day, day.dinner)], current: 1 };
   const recipe = bundle.recipes[day.dinner];
   const side = day.side ? bundle.recipes[day.side] : null;
   return {
@@ -158,10 +174,10 @@ export function buildDeck(bundle: DisplayBundle, now: Date): Deck {
   };
 }
 
-function leftoversScreen(bundle: DisplayBundle, day: MenuDay, dinner: string): LeftoversScreen {
+function doubleSecondDayScreen(bundle: DisplayBundle, day: MenuDay, dinner: string): DoubleSecondDayScreen {
   const tomorrow = bundle.weekMenus.flatMap((w) => w.days).find((d) => d.date === addDays(day.date, 1));
   return {
-    kind: "leftovers",
+    kind: "double-second-day",
     day: dayLabel(day.date),
     title: bundle.recipes[dinner].title,
     message: `2nd day of the Double, leftovers from ${weekdayName(addDays(day.date, -1))}, reheat gently`,
@@ -170,23 +186,19 @@ function leftoversScreen(bundle: DisplayBundle, day: MenuDay, dinner: string): L
 }
 
 function weekScreen(bundle: DisplayBundle, week: WeekMenu, today: string): WeekScreen {
-  const published = new Date(bundle.publishedAt);
-  const time = [published.getHours(), published.getMinutes()].map((n) => String(n).padStart(2, "0")).join(":");
-  return { kind: "week", days: week.days.map((d) => weekRow(bundle, d, today)), published: `${dayLabel(localDate(published))} ${time}` };
+  return { kind: "week", days: week.days.map((d) => weekRow(bundle, d, today)), published: timeLabel(new Date(bundle.publishedAt)) };
 }
 
 function weekRow(bundle: DisplayBundle, day: MenuDay, today: string): WeekRow {
   return {
     day: dayLabel(day.date),
     today: day.date === today,
-    dinner: day.dinner && bundle.recipes[day.dinner].title,
+    dinner: day.dinner ? bundle.recipes[day.dinner].title : day.unlinkedDinner ? `${day.unlinkedDinner} (deleted)` : null,
     side: day.side && bundle.recipes[day.side].title,
-    leftovers: day.double === "second",
+    doubleSecondDay: day.double === "second",
     tags: [...(day.novel ? ["New"] : []), ...(day.double === "cook" ? ["×2"] : [])],
   };
 }
-
-const localDate = (d: Date): string => [d.getFullYear(), d.getMonth() + 1, d.getDate()].map((n) => String(n).padStart(2, "0")).join("-");
 
 /** How many times the written amounts to cook: twice on a Double cook day, for tonight and tomorrow. */
 const timesFor = (day: MenuDay): number => (day.double === "cook" ? 2 : 1);

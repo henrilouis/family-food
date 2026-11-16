@@ -27,7 +27,7 @@ Done when you have a `week_start` whose Week Menu note exists.
 Run `food basket lines --week <week_start>`. It prints JSON `lines`, one per ingredient line of every Recipe and Side the week buys:
 - `line` (as written), `ingredient` (the name its Pinned Product is found by: without amount, preparation or remarks in brackets, and "tinned …" for a line bought in tins), `times` (dinners it is bought for: 2 on a Double cook day), `optional`;
 - `pinned`: the Pinned Product from Products.md (`product` id or null, `title`, `pack`, `kind`), or null;
-- `match`: for a pinned, non-optional line, its entry for `food basket fill`, ready to use. `packFraction: null` means the CLI couldn't compare the amount with the Pack: you work it out.
+- `match`: for a pinned, non-optional line, its Match (from the Pinned Product) for `food basket fill`, ready to use. `packFraction: null` means the CLI couldn't compare the amount with the Pack: you work it out.
 
 Also read `<vault>/Staples.md` (Staple products are candidates for matching, and a Staple's product merges with the recipe line into one Basket line), each bought Recipe's source (a Meal's `source` property, a Side's `Source:` line: an Allerhande URL there brings in its [Allerhande suggestions](#matching-order)), and the Week Menu note's `## Basket` section if there is one: its `Have at home:` line and product lines hold the earlier run's answers.
 
@@ -39,7 +39,7 @@ Every line with `optional: false` gets one entry. Optional lines get none: the C
 
 - A line with a complete `match` (a number or no `packFraction` field): take it as it is.
 - A `match` with `packFraction: null`: fill in the pack fraction.
-- A line without `pinned`: choose its product by the [matching order](#matching-order), give it a kind and a pack fraction. It is a **new match**.
+- A line without `pinned`: choose its product by the [matching order](#matching-order), give it a kind and a pack fraction. It is a **new Match**.
 
 An entry is `{ recipe, line, product, title, kind, packFraction }`, with `recipe` and `line` copied from the line:
 - `product`: the webshop id, or null when nothing sensible turned up (the CLI adds it to Mijn lijst as a free-text note).
@@ -50,7 +50,7 @@ An entry is `{ recipe, line, product, title, kind, packFraction }`, with `recipe
 Judgement calls:
 - "A or B" ("yellow or white onions", "ghee or grapeseed oil"): match A.
 - An ingredient that is clearly an existing Pinned Product under another name ("yellow or white onions" and the pinned "onion"), or a Staple's product ("plain yoghurt" and the Greek yoghurt Staple): use that product; it is still a new match, so the adult confirms it and it gets pinned under this name too.
-- A pinned match that plainly doesn't fit its line (a different form of the ingredient than the pin's product): list it under New matches as a correction for the adult to confirm.
+- A Match from a Pinned Product that plainly doesn't fit its line (a different form of the ingredient than the pin's product): list it under New matches as a correction for the adult to confirm.
 - **Running low**: when an adult says an Always in House item is running low ("we're out of cumin"), buy it this run: give its line `kind: "Cupboard Ingredient"` with a product and pack fraction (search for one if its pin has none). Its pin stays Always in House.
 
 Done when every non-optional line has an entry with a kind, and every entry with a product has a title and a pack fraction above 0.
@@ -97,7 +97,9 @@ Write `{ "lines": [entries…], "haveAtHome": [ids…] }` to a temp JSON file. T
 - **Exit 0**: Mijn lijst is filled (or the placed order already has everything). Show the report as printed.
 - **Exit 2**: nothing was written to AH. Show the adult the whole output: it starts with the reason (order already placed, login failed, AH ordering down) and holds the add-multiple links, the shopping list, or what to change in Mijn bestellingen.
 - **Exit 1** with "The matches don't fit the Week Menu": your list is off (a missing line, a line not on this week's Recipes, a product without pack fraction). Nothing was written; fix the entries and run it again.
-- **Exit 1** otherwise: pass the message on. "the Staple "Tea" has no AH product id": the adult buys that Staple by hand, or pins a product for it in Staples.md; after either, run it again.
+- **Exit 1** otherwise: pass the message on.
+
+A chosen Staple without an AH product id in `Staples.md` (Tea, the baby pouches) goes into Mijn lijst as a free-text note, "Tea (Staple ×1)", and is listed with the unmatched items. Nothing to do for it unless the adult wants it pinned: then add its product to `Staples.md` as a standing edit.
 
 Done when the adult has seen the report or the CLI's whole output.
 

@@ -1,5 +1,6 @@
 import { BUNDLE_SCHEMA_VERSION, type DisplayBundle, type Recipe } from "../bundle/bundle.ts";
-import { addDays, kitchenDate } from "../bundle/kitchen-day.ts";
+import { addDays } from "../bundle/dates.ts";
+import { kitchenDate } from "../bundle/kitchen-day.ts";
 import { readRecipe, readWeekMenus } from "./vault.ts";
 
 export async function buildBundle(vault: string, now: Date): Promise<DisplayBundle> {

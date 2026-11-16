@@ -124,6 +124,18 @@ describe("food bundle", () => {
     ]);
   });
 
+  test("carries a dinner written as plain text by its name, without a Recipe: only Free Day is the Free Day", async () => {
+    const { bundle, run } = await sandbox();
+    await run(["plan", "verdict", "2026-11-21", "rejected"]);
+    await run(["recipe", "delete", "Vegetable Biryani"]);
+
+    const { weekMenus, recipes } = await bundle("2026-11-21T10:00");
+
+    expect(weekMenus[0].days[1]).toEqual({ date: "2026-11-22", dinner: null, unlinkedDinner: "Vegetable Biryani", side: null, novel: true, double: null });
+    expect(weekMenus[0].days[6]).toEqual({ date: "2026-11-27", dinner: null, side: null, novel: false, double: null });
+    expect(Object.keys(recipes).sort()).toEqual(["Dahl", "Naan"]);
+  });
+
   test("holds only the Recipes and Sides the Week Menus use", async () => {
     const { bundle, vault } = await sandbox();
     await writeFile(path.join(vault, "Sides/Lime rice.md"), "# Lime rice\n\n## Ingredients\n\n- *200 g* basmati rice\n");
@@ -234,6 +246,39 @@ describe("food bundle", () => {
     expect(recipes["Lime rice"].method.map(marked)).toEqual([
       "Boil [200 g basmati rice] in water with [1 tsp salt] for the pan, 12 minutes.",
       "Stir in the zest of [1 lime] and the juice, then [2 spring onion] sliced thin and serve.",
+    ]);
+  });
+
+  test("marks an ingredient in a step whether it says it in the singular or the plural", async () => {
+    const { bundle, vault } = await sandbox();
+    await writeFile(
+      path.join(vault, "Sides/Aubergine bake.md"),
+      [
+        "# Aubergine bake",
+        "",
+        "## Ingredients",
+        "",
+        "- *2* aubergines",
+        "- *3* garlic cloves",
+        "- *50 g* olives",
+        "- *100 g* cherry tomatoes",
+        "- *1 tbsp* berries",
+        "",
+        "## Method",
+        "",
+        "1. Slice *1* aubergine with *1* garlic clove and *2* garlic cloves.",
+        "2. Add *1* olive, *49 g* olives, *1* cherry tomato and *1 tsp* berry.",
+        "",
+      ].join("\n"),
+    );
+    const menu = path.join(vault, "Week menus/Week 2026-11-21.md");
+    await writeFile(menu, (await readFile(menu, "utf8")).replace("| [[Naan]] |", "| [[Aubergine bake]] |"));
+
+    const { recipes } = await bundle("2026-11-21T10:00");
+
+    expect(recipes["Aubergine bake"].method.map(marked)).toEqual([
+      "Slice [1 aubergine] with [1 garlic clove] and [2 garlic cloves].",
+      "Add [1 olive], [49 g olives], [1 cherry tomato] and [1 tsp berry].",
     ]);
   });
 

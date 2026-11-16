@@ -1,9 +1,10 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { MenuDay } from "../bundle/bundle.ts";
-import { parseAmount } from "./amount.ts";
+import { dayLabel } from "../bundle/dates.ts";
+import { parseRecipeAmount } from "./amount.ts";
 import { isPublished } from "./build-bundle.ts";
-import { findRecipeNote, NoteError, parseRecipe, parseWeekMenu, readNotes, readWeekMenuNotes, RECIPE_FOLDERS, weekStartOf, type Note } from "./vault.ts";
+import { findRecipeNote, linkTarget, NoteError, parseRecipe, parseWeekMenu, readNotes, readWeekMenuNotes, RECIPE_FOLDERS, weekStartOf, type Note } from "./vault.ts";
 
 /** A format problem in one Recipe Vault note. `file` is relative to the vault, e.g. "Meals/Dahl.md". */
 export type Problem = { file: string; message: string };
@@ -21,7 +22,9 @@ export async function checkVault(vault: string, { publishing }: { publishing?: D
   const error = (note: Note, message: string) => check.errors.push({ file: relative(note), message });
   const warning = (note: Note, message: string) => check.warnings.push({ file: relative(note), message });
 
-  const weekMenus = (await readWeekMenuNotes(vault)).filter((note) => !publishing || isPublished(weekStartOf(note), publishing));
+  const allWeekMenus = await readWeekMenuNotes(vault);
+  const weekMenus = allWeekMenus.filter((note) => !publishing || isPublished(weekStartOf(note), publishing));
+  const judgedNovels = new Set(allWeekMenus.flatMap(judgedNovel));
   const recipes = new Map<string, Note>();
   for (const note of weekMenus.sort((a, b) => a.file.localeCompare(b.file))) {
     let days: MenuDay[];
@@ -33,6 +36,10 @@ export async function checkVault(vault: string, { publishing }: { publishing?: D
       continue;
     }
     for (const day of days) {
+      const unlinked = day.unlinkedDinner;
+      if (unlinked && !judgedNovels.has(unlinked)) {
+        error(note, `${dayLabel(day.date)} has the dinner "${unlinked}" as plain text: link it ([[${unlinked}]]) or write Free Day`);
+      }
       for (const name of [day.dinner, day.side]) {
         if (name === null) continue;
         const recipe = await findRecipeNote(vault, name);
@@ -61,6 +68,17 @@ export async function checkVault(vault: string, { publishing }: { publishing?: D
     }
   }
   return check;
+}
+
+/**
+ * The Novel Recipe a Week Menu's verdict judged: a 👎 one, or one not cooked and then deleted instead of kept waiting.
+ * `food recipe delete` leaves its name in the Week Menus as plain text.
+ */
+function judgedNovel(note: Note): string[] {
+  const { novel, novel_verdict: verdict } = note.properties;
+  if (!["rejected", "not cooked"].includes(String(verdict ?? "").trim().toLowerCase())) return [];
+  const name = linkTarget(String(novel ?? ""));
+  return name ? [name] : [];
 }
 
 const MEAL_PROPERTIES = ["serves", "active_minutes", "total_minutes", "cuisine", "base", "double", "source", "sides", "novel", "reviewed"];
@@ -112,7 +130,7 @@ function amountProblems(note: Note): string[] {
   let step: string | null = null;
   const checkStep = (text: string) => {
     for (const [, amount] of text.matchAll(ITALIC)) {
-      if (!parseAmount(amount)) problems.push(`step ${step}: the amount "${amount}" doesn't start with a number`);
+      if (!parseRecipeAmount(amount)) problems.push(`step ${step}: the amount "${amount}" doesn't start with a number`);
     }
   };
   for (const line of note.body.split("\n")) {
@@ -121,7 +139,7 @@ function amountProblems(note: Note): string[] {
       section = m[1].trim().toLowerCase();
       step = null;
     } else if (section === "ingredients" && (m = line.match(/^\s*[-*] \*([^*]+)\*/))) {
-      if (!parseAmount(m[1])) problems.push(`the ingredient amount "${m[1]}" doesn't start with a number`);
+      if (!parseRecipeAmount(m[1])) problems.push(`the ingredient amount "${m[1]}" doesn't start with a number`);
     } else if (section === "method") {
       if ((m = line.match(/^(\d+)[.)]\s+(.*)/))) {
         step = m[1];
@@ -139,15 +157,6 @@ function amountProblems(note: Note): string[] {
     problems.push(e.problem);
   }
   return problems;
-}
-
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-/** "2026-11-21" → "Sat 21 Nov", as a Week Menu's Day column writes it. */
-export function dayLabel(date: string): string {
-  const d = new Date(`${date}T00:00:00Z`);
-  return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
 }
 
 /** The check as text for a person: one line per problem, then a count. */

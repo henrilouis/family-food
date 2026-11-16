@@ -66,7 +66,7 @@ Done when you can name the week (`week.days[0]` to `week.days[6]`) and whether i
 
 Ask about `review.novel`: 👍 keep, 👎 delete, or not cooked.
 - **👍**: `food plan verdict <review.weekStart> kept`.
-- **👎**: ask to confirm the deletion ("Delete *X* from the Recipe Vault? Its verdict and source stay in the week's note, so it is never suggested again."). Run `food plan verdict <review.weekStart> rejected`, then on a yes `food recipe delete "<X>"`. On a no the Recipe stays as an ordinary Meal.
+- **👎**: ask to confirm the deletion ("Delete *X* from the Recipe Vault? Its verdict and source stay in the week's note, so it is never suggested again."). Run `food plan verdict <review.weekStart> rejected`, then on a yes `food recipe delete "<X>"`. On a no the Recipe stays as an ordinary Meal: the `rejected` verdict already cleared its `novel` (so it never waits as a Novel Recipe again), and its source is in `rejectedSources`, so it is never a candidate again. Plan it like any other Meal.
 - **Not cooked**: `food plan verdict <review.weekStart> "not cooked"`. The Recipe **carries over**: it is this week's Novel Recipe with `review.novelSource`, and there is no candidate search. Offer it; if the adult declines it, ask whether to delete it (`food recipe delete`) or keep it waiting (it stays `novel: true`), then search for candidates.
 
 A **waiting** Novel Recipe is a Meal with `novel: true` other than `review.novel`. At most one waits: when one exists and nothing carries over, offer it as this week's Novel Recipe before searching, and when the adult declines a carry-over while another one waits, the choice is delete or keep this week.
@@ -105,7 +105,7 @@ Show the Weekly Staples with their quantities and list every Ask Staple, from `S
 - `Extra: eggs ×1` (more than usual)
 - `Ask Staples: peanut butter, oats ×2` (the Ask Staples chosen; ×n overrides the usual quantity)
 
-"From now on" answers are [standing edits](#standing-edits), not lines. A chosen Staple without an AH id in `Staples.md` can't go in a line (`food plan write` refuses it): tell the adult to buy it by hand, or pin a product for it as a standing edit.
+"From now on" answers are [standing edits](#standing-edits), not lines. A chosen Staple without an AH id in `Staples.md` goes in a line like any other: Basket filling adds it to Mijn lijst as a free-text note.
 
 Done when every deviation is a line or a standing edit, and the adult has seen the lines.
 
@@ -114,8 +114,8 @@ Done when every deviation is a line or a standing edit, and the adult has seen t
 Only on an explicit "lock it" (or the adult's clear equivalent).
 
 1. Run `food plan context` again. If `week.late` has become true, follow the [Late path](#late-path) before writing.
-2. Write the [plan JSON](#the-plan-json) to a temp file and run `food plan write <file>`. Exit 1 names what doesn't fit; fix the plan and run it again.
-3. **Save the Novel Recipe**, unless it carried over or waited (it is already in the vault): invoke the `add-recipe` skill with its URL (or text), `novel: true`, the title the plan used, and the folder `Meals`. If add-recipe refuses it (meat), tell the adult, agree another candidate, edit the new note's Novel day row and its `novel` / `novel_source` properties, and invoke add-recipe again.
+2. Write the [Week Menu JSON](#the-week-menu-json) to a temp file and run `food plan write <file>`. Exit 1 names what doesn't fit; fix the JSON and run it again.
+3. **Save the Novel Recipe**, unless it carried over or waited (it is already in the vault): invoke the `add-recipe` skill with its URL (or text), `novel: true`, the title the Week Menu used, and the folder `Meals`. If add-recipe refuses it (meat), tell the adult, agree another candidate, edit the new note's Novel day row and its `novel` / `novel_source` properties, and invoke add-recipe again.
 4. **Delete the honoured Wishes**: `food notes wishes delete <wish>... --json`, each Wish exactly as listed. Exit 2 (or exit 1): Notes won't take the change; tell the adult to delete the `deleteByHand` Wishes (or all honoured ones) by hand, and list them.
 5. **Publish**: `food publish`.
    - Exit 0, "Kitchen Display updated…": done.
@@ -125,7 +125,7 @@ Only on an explicit "lock it" (or the adult's clear equivalent).
 
 Done when the note is written, the Novel Recipe saved, the Wishes deleted or listed for deletion by hand, the week Published (or the adult told to publish at home), and `fill-basket` started.
 
-## The plan JSON
+## The Week Menu JSON
 
 ```json
 {

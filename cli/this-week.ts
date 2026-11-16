@@ -1,6 +1,6 @@
 import type { DisplayBundle, MenuDay } from "../bundle/bundle.ts";
+import { dayLabel, timeLabel } from "../bundle/dates.ts";
 import { familyNotes, type NoteLine } from "./adapters/apple-notes/notes.ts";
-import { dayLabel } from "./check.ts";
 import type { Config } from "./config.ts";
 
 /**
@@ -16,20 +16,20 @@ function thisWeekLines(bundle: DisplayBundle, now: Date): NoteLine[] {
   if (bundle.weekMenus.length === 0) return [...lines, "", "No Week Menu yet."];
   const title = (key: string | null) => (key ? bundle.recipes[key]?.title ?? key : "");
   const dinner = (day: MenuDay) => {
-    if (!day.dinner) return "Free Day";
-    const marks = [day.novel && "new recipe", day.double === "cook" && "cook double", day.double === "second" && "leftovers"];
+    const name = day.dinner ? title(day.dinner) : day.unlinkedDinner;
+    if (!name) return "Free Day";
+    const marks = [
+      !day.dinner && "deleted",
+      day.novel && "new recipe",
+      day.double === "cook" && "cook double",
+      day.double === "second" && "leftovers",
+    ];
     const notes = marks.filter(Boolean).join(", ");
-    return title(day.dinner) + (day.side && day.double !== "second" ? ` with ${title(day.side)}` : "") + (notes ? ` (${notes})` : "");
+    return name + (day.side && day.double !== "second" ? ` with ${title(day.side)}` : "") + (notes ? ` (${notes})` : "");
   };
   for (const week of bundle.weekMenus) {
     lines.push("", { heading: `Week of ${dayLabel(week.weekStart)}` });
     for (const day of week.days) lines.push(`${dayLabel(day.date)}: ${dinner(day)}`);
   }
   return lines;
-}
-
-/** Local time, e.g. "Fri 20 Nov 18:00". */
-function timeLabel(d: Date): string {
-  const date = [d.getFullYear(), d.getMonth() + 1, d.getDate()].map((n) => String(n).padStart(2, "0")).join("-");
-  return `${dayLabel(date)} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }

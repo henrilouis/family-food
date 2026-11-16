@@ -1,3 +1,5 @@
+import { UserError } from "../../user-error.ts";
+
 /** A product as AH's REST search (`/mobile-services/product/search/v2`) returns it. Only the fields the gateway reads. */
 export type AhProduct = {
   webshopId: number;
@@ -119,8 +121,8 @@ export interface AhClient {
   recipeProductSuggestions(id: number): Promise<AhRecipeProductSuggestion[]>;
 }
 
-/** A problem with AH that the person running `food` can act on; printed without a stack trace. */
-export class AhError extends Error {}
+/** A problem with AH that the person running `food` can act on. */
+export class AhError extends UserError {}
 
 /** AH doesn't answer, or answers with a server error: its ordering is down (as for 12 days in October 2026). */
 export class AhUnavailableError extends AhError {

@@ -34,7 +34,7 @@ function step(screen: StepScreen): string {
 /** A day's dinner on one line: "Dahl + Naan ×2", "↳ Dahl (leftovers)" or "Free Day". */
 function dayLine(row: WeekRow): string {
   if (!row.dinner) return "Free Day";
-  const dinner = row.leftovers ? `↳ ${esc(row.dinner)} <span class="muted">(leftovers)</span>` : esc(row.dinner);
+  const dinner = row.doubleSecondDay ? `↳ ${esc(row.dinner)} <span class="muted">(leftovers)</span>` : esc(row.dinner);
   return dinner + (row.side ? ` <span class="muted">+ ${esc(row.side)}</span>` : "") + row.tags.map((t) => ` <span class="tag">${esc(t)}</span>`).join("");
 }
 
@@ -42,7 +42,7 @@ function week(screen: WeekScreen): string {
   const rows = screen.days.map((row) => {
     const [weekday, ...date] = row.day.split(" ");
     const classes = ["row", row.today ? "today" : "", row.dinner ? "" : "free-hatch"].filter(Boolean).join(" ");
-    return `<div class="${classes}"><div class="d">${esc(weekday)}<br>${esc(date.join(" "))}</div><div${row.leftovers ? ` class="second"` : ""}>${dayLine(row)}</div></div>`;
+    return `<div class="${classes}"><div class="d">${esc(weekday)}<br>${esc(date.join(" "))}</div><div${row.doubleSecondDay ? ` class="second"` : ""}>${dayLine(row)}</div></div>`;
   });
   return head("Week Menu", `Published ${esc(screen.published)}`) + `<div class="fit week">${rows.join("")}</div>`;
 }
@@ -64,12 +64,14 @@ export function renderScreen(screen: Screen): string {
       return week(screen);
     case "message":
       return head(`${esc(screen.day)} · Today`) + `<div class="fit message">${esc(screen.message)}</div>`;
+    case "recipe-gone":
+      return head(`${esc(screen.day)} · Today`) + `<div class="fit"><div class="message">${esc(screen.title)}</div><p class="lead">${esc(screen.message)}.</p></div>`;
     case "free-day":
       return (
         head(`${esc(screen.day)} · Today`) +
         `<div class="fit free-hatch"><div class="message">${esc(screen.title)}</div><p class="lead">${esc(screen.message)}.</p></div>`
       );
-    case "leftovers":
+    case "double-second-day":
       return (
         head(`${esc(screen.day)} · Today`) +
         `<div class="fit"><div class="message">${esc(screen.title)}</div><p class="lead">${esc(screen.message)}.</p>` +

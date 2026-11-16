@@ -1,14 +1,24 @@
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { addDays } from "../bundle/kitchen-day.ts";
-import { staplesThisWeek } from "./basket.ts";
-import { dayLabel } from "./check.ts";
-import { findRecipeNote, linkTarget, parseWeekMenu, readNotes, readWeekMenuNotes, NoteError, RECIPE_FOLDERS, VaultError, weekStartOf, type Note } from "./vault.ts";
-
-const WEEK_MENUS = "Week menus";
+import { addDays, dayLabel, localDate } from "../bundle/dates.ts";
+import { staplesThisWeek } from "./basket/staples.ts";
+import {
+  findRecipeNote,
+  linkTarget,
+  NoteError,
+  parseWeekMenu,
+  readNotes,
+  readWeekMenuNotes,
+  RECIPE_FOLDERS,
+  VaultError,
+  WEEK_MENUS,
+  weekStartOf,
+  type Note,
+} from "./vault.ts";
+import { UserError } from "./user-error.ts";
 
 /** The Week Menu a Planning Session at `now` plans: the next Saturday → Friday, and whether its Saturday delivery is missed. */
-export type PlannedWeek = {
+export type WeekMenuToPlan = {
   weekStart: string;
   /** The Week Menu note, relative to the vault. */
   file: string;
@@ -36,7 +46,7 @@ export type Review = {
 };
 
 export type PlanContext = {
-  week: PlannedWeek;
+  week: WeekMenuToPlan;
   review: Review | null;
   /** The last 3 Week Menus before the planned week, newest first: the repeat window. */
   recentWeeks: { weekStart: string; dinners: string[] }[];
@@ -72,7 +82,7 @@ const REPEAT_WINDOW = 3;
 
 /** What the planning-session skill needs to know before it proposes a week. */
 export async function planContext(vault: string, now: Date): Promise<PlanContext> {
-  const week = await plannedWeek(vault, now);
+  const week = await weekMenuToPlan(vault, now);
   const notes = await readWeekMenuNotes(vault);
   const before = notes.filter((note) => weekStartOf(note) < week.weekStart).sort((a, b) => weekStartOf(b).localeCompare(weekStartOf(a)));
   const history = before.map(parseWeekMenu);
@@ -92,9 +102,9 @@ export async function planContext(vault: string, now: Date): Promise<PlanContext
       cuisine: text(p.cuisine),
       base: list(p.base),
       double: p.double === true,
-      activeMinutes: number(p.active_minutes),
-      totalMinutes: number(p.total_minutes),
-      serves: number(p.serves),
+      activeMinutes: numberProperty(p.active_minutes),
+      totalMinutes: numberProperty(p.total_minutes),
+      serves: numberProperty(p.serves),
       sides: list(p.sides).flatMap((side) => linkTarget(side) ?? []),
       source: text(p.source),
       novel: p.novel === true,
@@ -238,11 +248,11 @@ export async function deleteRecipe(vault: string, name: string): Promise<string[
   return [`Deleted ${path.relative(vault, recipe.file)}`, ...(unlinked.length ? [`Unlinked it in ${unlinked.join(", ")}`] : [])];
 }
 
-/** The plan's shape doesn't make a Week Menu; printed without a stack trace. */
-export class PlanInputError extends Error {}
+/** The Locked Week Menu handed to `food plan write` doesn't make a Week Menu note. */
+export class PlanInputError extends UserError {}
 
 /** A Locked Week Menu as the planning-session skill hands it over: `food plan write` turns it into the note. */
-export type WeekPlan = {
+export type LockedWeekMenu = {
   /** The Saturday, YYYY-MM-DD. */
   weekStart: string;
   /** The Novel Recipe's source URL, for `novel_source`; the Novel Recipe itself is the day marked `novel`. */
@@ -255,9 +265,9 @@ export type WeekPlan = {
   notes?: string[];
 };
 
-/** Writes the Week Menu note for a plan, after checking it makes one. Returns the note's path in the vault. */
-export async function writeWeekMenu(vault: string, plan: WeekPlan): Promise<string> {
-  const { weekStart, days } = plan;
+/** Writes the note of a Locked Week Menu, after checking it makes one. Returns the note's path in the vault. */
+export async function writeWeekMenu(vault: string, weekMenu: LockedWeekMenu): Promise<string> {
+  const { weekStart, days } = weekMenu;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(weekStart ?? "") || new Date(`${weekStart}T00:00:00Z`).getUTCDay() !== 6) {
     throw new PlanInputError(`The week starts on a Saturday; ${weekStart} is not a Saturday`);
   }
@@ -272,7 +282,7 @@ export async function writeWeekMenu(vault: string, plan: WeekPlan): Promise<stri
   });
   const novels = [...new Set(days.filter((day) => day.novel && day.dinner).map((day) => day.dinner))];
   if (novels.length > 1) problems.push(`A Week Menu has one Novel Recipe, not ${novels.join(", ")}`);
-  if (problems.length) throw new PlanInputError(`The plan doesn't make a Week Menu:\n${problems.map((p) => `- ${p}`).join("\n")}`);
+  if (problems.length) throw new PlanInputError(`Can't write this Week Menu:\n${problems.map((p) => `- ${p}`).join("\n")}`);
 
   const file = path.join(vault, WEEK_MENUS, weekMenuName(weekStart));
   const exists = await access(file).then(
@@ -290,7 +300,7 @@ export async function writeWeekMenu(vault: string, plan: WeekPlan): Promise<stri
       .filter(Boolean)
       .join(", "),
   ]);
-  const source = plan.novelSource?.trim() ?? "";
+  const source = weekMenu.novelSource?.trim() ?? "";
   const body = [
     "---",
     `week_start: ${weekStart}`,
@@ -303,17 +313,17 @@ export async function writeWeekMenu(vault: string, plan: WeekPlan): Promise<stri
     ...table(["Day", "Dinner", "Side", "Note"], rows),
     "",
     "## Staples this week",
-    ...(plan.staples ?? []).map((line) => `- ${line}`),
+    ...(weekMenu.staples ?? []).map((line) => `- ${line}`),
     "",
     "## Notes",
-    ...(plan.notes ?? []).map((line) => `- ${line}`),
+    ...(weekMenu.notes ?? []).map((line) => `- ${line}`),
     "",
   ].join("\n");
   // The Staples lines must be ones Basket filling can read.
   try {
     await staplesThisWeek(vault, { file, properties: {}, body });
   } catch (error) {
-    if (error instanceof NoteError) throw new PlanInputError(`The plan doesn't make a Week Menu: ${error.problem}`);
+    if (error instanceof NoteError) throw new PlanInputError(`Can't write this Week Menu: ${error.problem}`);
     throw error;
   }
   await mkdir(path.dirname(file), { recursive: true });
@@ -344,7 +354,8 @@ function list(value: unknown): string[] {
   return (value === undefined || value === null ? [] : [value].flat()).flatMap((item) => text(item) ?? []);
 }
 
-function number(value: unknown): number | null {
+/** A number property, or null when it isn't a number. */
+function numberProperty(value: unknown): number | null {
   return typeof value === "number" ? value : null;
 }
 
@@ -365,7 +376,7 @@ function text(value: unknown): string | null {
   return value === undefined || value === null || String(value).trim() === "" ? null : String(value).trim();
 }
 
-async function plannedWeek(vault: string, now: Date): Promise<PlannedWeek> {
+async function weekMenuToPlan(vault: string, now: Date): Promise<WeekMenuToPlan> {
   const today = localDate(now);
   const weekday = new Date(`${today}T00:00:00Z`).getUTCDay();
   const weekStart = addDays(today, (6 - weekday + 7) % 7 || 7);
@@ -388,9 +399,4 @@ async function plannedWeek(vault: string, now: Date): Promise<PlannedWeek> {
 /** A Week Menu's file name, after its Saturday: "Week 2026-11-28.md". */
 export function weekMenuName(weekStart: string): string {
   return `Week ${weekStart}.md`;
-}
-
-/** The local calendar date at `now`, as YYYY-MM-DD. */
-function localDate(now: Date): string {
-  return [now.getFullYear(), now.getMonth() + 1, now.getDate()].map((n) => String(n).padStart(2, "0")).join("-");
 }

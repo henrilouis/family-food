@@ -1,4 +1,5 @@
 import type { Amount, IngredientGroup, Step } from "../bundle/bundle.ts";
+import { wordSet, type WordSet } from "./ingredient.ts";
 
 /** Words that end an ingredient span even when the ingredient list happens to contain them. */
 const JOINING_WORDS = new Set(
@@ -7,13 +8,10 @@ const JOINING_WORDS = new Set(
 
 const WORD = /^\s+([A-Za-zÀ-ÖØ-öø-ÿ]+(?:-[A-Za-zÀ-ÖØ-öø-ÿ]+)*)/;
 
-/** Lower case, without a plural ending, so "tomato" and "tomatoes" compare equal. */
-const stem = (word: string) => word.toLowerCase().replace(/(es|s)$/, "");
-
-/** The words of a Recipe's ingredient list, as stems. */
-export function ingredientWords(groups: IngredientGroup[]): Set<string> {
+/** The words of a Recipe's ingredient list, found in the singular or the plural. */
+export function ingredientWords(groups: IngredientGroup[]): WordSet {
   const words = groups.flatMap((g) => g.items).flatMap((item) => item.text.split(/[^A-Za-zÀ-ÖØ-öø-ÿ]+/));
-  return new Set(words.filter((w) => w.length > 1).map(stem));
+  return wordSet(words.filter((w) => w.length > 1));
 }
 
 /**
@@ -21,7 +19,7 @@ export function ingredientWords(groups: IngredientGroup[]): Set<string> {
  * takes in the following words for as long as they appear in the ingredient list and aren't joining words.
  * `parse` reads an italic amount; it throws when the amount doesn't parse.
  */
-export function markStep(text: string, vocabulary: Set<string>, parse: (amount: string) => Amount): Step {
+export function markStep(text: string, vocabulary: WordSet, parse: (amount: string) => Amount): Step {
   const step: Step = [];
   const pushText = (s: string) => {
     if (!s) return;
@@ -35,7 +33,7 @@ export function markStep(text: string, vocabulary: Set<string>, parse: (amount: 
     const words: string[] = [];
     for (let w: RegExpMatchArray | null; (w = rest.match(WORD)); rest = rest.slice(w[0].length)) {
       const word = w[1];
-      if (JOINING_WORDS.has(word.toLowerCase()) || !word.split("-").every((part) => vocabulary.has(stem(part)))) break;
+      if (JOINING_WORDS.has(word.toLowerCase()) || !word.split("-").every((part) => vocabulary.has(part))) break;
       words.push(word);
     }
     step.push({ amount: parse(m[1]), ingredient: words.join(" ") });

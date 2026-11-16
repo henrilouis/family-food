@@ -1,3 +1,4 @@
+import { parseMeasure, type Dimension, type Measure } from "../../amount.ts";
 import type { AhProduct } from "./client.ts";
 
 /** A product as the gateway hands it out: cleaned up, with the price you pay now and the unit price at that price. */
@@ -16,49 +17,15 @@ export type Product = {
   previouslyBought: boolean;
 };
 
-type Dimension = "mass" | "volume" | "count";
-/** An amount in g, ml or pieces. */
-export type Amount = { value: number; dimension: Dimension };
-
-const units: Record<string, [Dimension, number]> = {
-  g: ["mass", 1],
-  gr: ["mass", 1],
-  gram: ["mass", 1],
-  kg: ["mass", 1000],
-  kilo: ["mass", 1000],
-  ml: ["volume", 1],
-  cl: ["volume", 10],
-  dl: ["volume", 100],
-  l: ["volume", 1000],
-  liter: ["volume", 1000],
-  st: ["count", 1],
-  stuk: ["count", 1],
-  stuks: ["count", 1],
-  piece: ["count", 1],
-  pieces: ["count", 1],
-  "": ["count", 1],
-};
-
-/** Reads an amount or an AH pack size, such as "400 g", "ca. 1 kg", "1,5 l", "6 stuks", "per stuk" or "3" (pieces). */
-export function parseAmount(text: string | undefined): Amount | null {
-  if (!text) return null;
-  const size = text.trim().toLowerCase().replace(/^ca\.?\s*/, "").replace(/^per\s+/, "1 ").replace(/\.$/, "");
-  const match = size.match(/^(\d+(?:[.,]\d+)?)\s*([a-z]*)$/);
-  if (!match) return null;
-  const unit = units[match[2]];
-  const value = Number(match[1].replace(",", ".")) * (unit?.[1] ?? 0);
-  return unit && value > 0 ? { value, dimension: unit[0] } : null;
-}
-
 const perUnit = { mass: ["kg", 1000], volume: ["l", 1000], count: ["piece", 1] } as const;
 
 const cents = (euros: number) => Math.round(euros * 100);
 const currentCents = (p: AhProduct) => cents(p.currentPrice || p.priceBeforeBonus || 0);
 
-type Candidate = { product: AhProduct; pack: Amount | null; unitCents: number | null };
+type Candidate = { product: AhProduct; pack: Measure | null; unitCents: number | null };
 
 function candidate(product: AhProduct): Candidate {
-  const pack = parseAmount(product.salesUnitSize);
+  const pack = parseMeasure(product.salesUnitSize);
   const unitCents = pack ? Math.round((currentCents(product) * perUnit[pack.dimension][1]) / pack.value) : null;
   return { product, pack, unitCents };
 }
@@ -83,7 +50,7 @@ function mostCommonDimension(candidates: Candidate[]): Dimension | undefined {
   return [...counts].sort((a, b) => b[1] - a[1])[0]?.[0];
 }
 
-function leastWasteful(candidates: Candidate[], need: Amount): Candidate[] {
+function leastWasteful(candidates: Candidate[], need: Measure): Candidate[] {
   const waste = ({ pack }: Candidate) => Math.ceil(need.value / pack!.value - 1e-9) * pack!.value - need.value;
   const fine = candidates.filter((c) => waste(c) <= 2 * need.value);
   if (fine.length > 0) return fine;
@@ -101,7 +68,7 @@ const isHouseBrand = (p: AhProduct) => /^AH\b/.test(p.brand ?? "");
  * then the least wasteful stay), and only packs in the need's unit are compared.
  * Products sold in another unit than most results, or whose pack size can't be read, follow in AH's order.
  */
-export function rankProducts(results: AhProduct[], need?: Amount): Product[] {
+export function rankProducts(results: AhProduct[], need?: Measure): Product[] {
   const candidates = results
     .filter((p) => !p.isSponsored && p.isOrderable && !isMultipack(p))
     .map(candidate);

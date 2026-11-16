@@ -9,6 +9,12 @@ export type Config = {
   fakes?: { ah?: string; "display-target"?: string; "apple-notes"?: string };
 };
 
+/**
+ * Set for every test, and the CLI processes they start, by `vitest.config.ts`: the real AH, Apple Notes and recipe
+ * sites off this Mac refuse, so a test that forgets its fake can't reach the household's accounts or the web.
+ */
+export const fakesOnly = () => process.env.FOOD_FAKES_ONLY === "1";
+
 export const configDir = () =>
   process.env.FOOD_CONFIG_DIR ?? path.join(os.homedir(), "Library/Application Support/family-food");
 const configFile = () => path.join(configDir(), "config.json");
