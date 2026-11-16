@@ -87,3 +87,61 @@ describe("Food wishes", () => {
     expect(JSON.parse(result.stdout).error).toContain('No note "Food wishes"');
   });
 });
+
+const recipesNote = [
+  "<div><h1>Recipes to add</h1></div>",
+  '<div><a href="https://www.ah.nl/allerhande/recept/R-R1199025/shakshuka">https://www.ah.nl/allerhande/recept/R-R1199025/shakshuka</a></div>',
+  "<div>https://cookieandkate.com/black-bean-soup/</div>",
+  "<div><br></div>",
+  "<div>Oma's lentil soup</div>",
+  "<div>250 g lentils, 1 onion</div>",
+  "<div>Simmer for 30 minutes.</div>",
+  "<div><br></div>",
+  "<div>https://www.budgetbytes.com/chana-masala/</div>",
+].join("\n");
+
+describe("Recipes to add", () => {
+  test("lists each URL and each pasted recipe as one item", async () => {
+    const { run, fake } = await sandbox();
+    await seed(await fake("apple-notes"), { "Recipes to add": recipesNote });
+
+    const result = await run(["notes", "recipes-to-add", "--json"]);
+
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual([
+      "https://www.ah.nl/allerhande/recept/R-R1199025/shakshuka",
+      "https://cookieandkate.com/black-bean-soup/",
+      "Oma's lentil soup\n250 g lentils, 1 onion\nSimmer for 30 minutes.",
+      "https://www.budgetbytes.com/chana-masala/",
+    ]);
+  });
+
+  test("removing imported items leaves the others", async () => {
+    const { run, fake } = await sandbox();
+    await seed(await fake("apple-notes"), { "Recipes to add": recipesNote });
+
+    const imported = ["https://cookieandkate.com/black-bean-soup/", "Oma's lentil soup\n250 g lentils, 1 onion\nSimmer for 30 minutes."];
+
+    const result = await run(["notes", "recipes-to-add", "remove", ...imported, "--json"]);
+
+    expect(result.code).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual({ deleted: imported, notFound: [], deleteByHand: [], error: null });
+    expect(JSON.parse((await run(["notes", "recipes-to-add", "--json"])).stdout)).toEqual([
+      "https://www.ah.nl/allerhande/recept/R-R1199025/shakshuka",
+      "https://www.budgetbytes.com/chana-masala/",
+    ]);
+  });
+
+  test("when Notes refuses the change, the items come back as a delete-by-hand list", async () => {
+    const { run, fake } = await sandbox();
+    const folder = await fake("apple-notes");
+    await seed(folder, { "Recipes to add": recipesNote });
+    await writeFile(path.join(folder, "fake.json"), JSON.stringify({ writes: "fail" }));
+
+    const result = await run(["notes", "recipes-to-add", "remove", "https://cookieandkate.com/black-bean-soup/"]);
+
+    expect(result.code).toBe(2);
+    expect(result.stdout).toContain('Please delete these from "Recipes to add" by hand:\n- https://cookieandkate.com/black-bean-soup/\n');
+  });
+});

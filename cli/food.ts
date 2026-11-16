@@ -2,7 +2,7 @@
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { AhError, ahGateway, parseAmount } from "./adapters/ah/gateway.ts";
-import { AppleNotesError, familyNotes, FOOD_WISHES, type Deletion } from "./adapters/apple-notes/notes.ts";
+import { AppleNotesError, familyNotes, FOOD_WISHES, RECIPES_TO_ADD, type Deletion } from "./adapters/apple-notes/notes.ts";
 import { buildBundle } from "./build-bundle.ts";
 import { checkVault, formatCheck } from "./check.ts";
 import { readConfig, writeConfig } from "./config.ts";
@@ -119,6 +119,13 @@ async function notes(args: string[]): Promise<void> {
       if (action !== undefined) throw new UsageError(usage);
       const wishes = await family.wishes();
       process.stdout.write(values.json ? JSON.stringify(wishes, null, 2) + "\n" : wishes.map((wish) => wish + "\n").join(""));
+      return;
+    }
+    case "recipes-to-add": {
+      if (action === "remove" && items.length > 0) return report(RECIPES_TO_ADD, await family.removeRecipesToAdd(items));
+      if (action !== undefined) throw new UsageError(usage);
+      const recipes = await family.recipesToAdd();
+      process.stdout.write(values.json ? JSON.stringify(recipes, null, 2) + "\n" : recipes.map((item) => item + "\n\n").join(""));
       return;
     }
     default:

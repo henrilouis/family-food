@@ -31,6 +31,13 @@ export interface FamilyNotes {
   wishes(): Promise<string[]>;
   /** Deletes the given Wishes (as `wishes()` lists them, case aside), every line holding one. */
   deleteWishes(wishes: string[]): Promise<Deletion>;
+  /**
+   * The items in Recipes to add: each URL on its own, and each pasted recipe as one item
+   * (its lines up to a blank line). A pasted recipe holding blank lines comes out as several items.
+   */
+  recipesToAdd(): Promise<string[]>;
+  /** Removes the given items (as `recipesToAdd()` lists them) once imported. */
+  removeRecipesToAdd(items: string[]): Promise<Deletion>;
 }
 
 /** The Family food notes: the fake when the local config names a folder in `fakes["apple-notes"]`, else the Notes app. */
@@ -75,6 +82,10 @@ export function familyNotes(config: Config): FamilyNotes {
       return wishItems(await read(FOOD_WISHES)).map((item) => item.text);
     },
     deleteWishes: (wishes) => deleteItems(FOOD_WISHES, wishes, wishItems),
+    async recipesToAdd() {
+      return recipeItems(await read(RECIPES_TO_ADD)).map((item) => item.text);
+    },
+    removeRecipesToAdd: (items) => deleteItems(RECIPES_TO_ADD, items, recipeItems),
   };
 }
 
@@ -86,6 +97,21 @@ function wishItems(note: ParsedNote): Item[] {
     .map((line) => ({ text: itemText(line.text), lines: [line] }))
     .filter((item) => item.text !== "");
 }
+
+/** Paragraphs (split by blank lines), a paragraph of only URLs giving one item per URL. */
+function recipeItems(note: ParsedNote): Item[] {
+  const paragraphs: Line[][] = [[]];
+  for (const line of bodyLines(note)) {
+    if (line.text === "") paragraphs.push([]);
+    else paragraphs[paragraphs.length - 1].push(line);
+  }
+  return paragraphs
+    .filter((lines) => lines.length > 0)
+    .flatMap((lines) => (lines.every((line) => URL_LINE.test(itemText(line.text))) ? lines.map((line) => [line]) : [lines]))
+    .map((lines) => ({ text: lines.map((line) => itemText(line.text)).join("\n"), lines }));
+}
+
+const URL_LINE = /^https?:\/\/\S+$/;
 
 /** A line as written, without a typed list marker ("- ", "• "). */
 const itemText = (line: string) => line.replace(/^[-*•–]\s+/, "").trim();
