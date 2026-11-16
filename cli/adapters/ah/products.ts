@@ -42,12 +42,12 @@ const units: Record<string, [Dimension, number]> = {
 /** Reads an amount or an AH pack size, such as "400 g", "ca. 1 kg", "1,5 l", "6 stuks", "per stuk" or "3" (pieces). */
 export function parseAmount(text: string | undefined): Amount | null {
   if (!text) return null;
-  const size = text.trim().toLowerCase().replace(/^ca\.?\s*/, "").replace(/^per\s+/, "1 ");
+  const size = text.trim().toLowerCase().replace(/^ca\.?\s*/, "").replace(/^per\s+/, "1 ").replace(/\.$/, "");
   const match = size.match(/^(\d+(?:[.,]\d+)?)\s*([a-z]*)$/);
   if (!match) return null;
   const unit = units[match[2]];
-  if (!unit) return null;
-  return { value: Number(match[1].replace(",", ".")) * unit[1], dimension: unit[0] };
+  const value = Number(match[1].replace(",", ".")) * (unit?.[1] ?? 0);
+  return unit && value > 0 ? { value, dimension: unit[0] } : null;
 }
 
 const perUnit = { mass: ["kg", 1000], volume: ["l", 1000], count: ["piece", 1] } as const;

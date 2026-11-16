@@ -40,7 +40,8 @@ export function ahdumpClient(tokenFile: string): AhClient {
     refreshLogin: async () => {
       await ahdump(["refresh"]);
     },
-    searchProducts: (query, token) => products(["search", "-token", token, query]),
-    searchByPurchaseFrequency: (query) => products(["search", "-token", "user", "-sort", "PURCHASE_FREQUENCY", query]),
+    searchProducts: (query, token) => products(["search", "-token", token, "--", query]),
+    searchByPurchaseFrequency: (query) =>
+      products(["search", "-token", "user", "-sort", "PURCHASE_FREQUENCY", "--", query]),
   };
 }
