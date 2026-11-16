@@ -18,6 +18,7 @@ npm install
 npm link                                  # puts `food` on your PATH
 food config vault "<path to the Recipes vault>"
 food preview                              # http://localhost:8787/
+food publish                              # after editing in Obsidian: send the Week Menus to the Kitchen Display
 ```
 
 The local config lives in `~/Library/Application Support/family-food/` (`FOOD_CONFIG_DIR` overrides it). `FOOD_NOW` fixes the CLI's clock.
