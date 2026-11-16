@@ -237,6 +237,39 @@ describe("food bundle", () => {
     ]);
   });
 
+  test("marks an ingredient in a step whether it says it in the singular or the plural", async () => {
+    const { bundle, vault } = await sandbox();
+    await writeFile(
+      path.join(vault, "Sides/Aubergine bake.md"),
+      [
+        "# Aubergine bake",
+        "",
+        "## Ingredients",
+        "",
+        "- *2* aubergines",
+        "- *3* garlic cloves",
+        "- *50 g* olives",
+        "- *100 g* cherry tomatoes",
+        "- *1 tbsp* berries",
+        "",
+        "## Method",
+        "",
+        "1. Slice *1* aubergine with *1* garlic clove and *2* garlic cloves.",
+        "2. Add *1* olive, *49 g* olives, *1* cherry tomato and *1 tsp* berry.",
+        "",
+      ].join("\n"),
+    );
+    const menu = path.join(vault, "Week menus/Week 2026-11-21.md");
+    await writeFile(menu, (await readFile(menu, "utf8")).replace("| [[Naan]] |", "| [[Aubergine bake]] |"));
+
+    const { recipes } = await bundle("2026-11-21T10:00");
+
+    expect(recipes["Aubergine bake"].method.map(marked)).toEqual([
+      "Slice [1 aubergine] with [1 garlic clove] and [2 garlic cloves].",
+      "Add [1 olive], [49 g olives], [1 cherry tomato] and [1 tsp berry].",
+    ]);
+  });
+
   test("gives each Recipe its notes and source", async () => {
     const { bundle } = await sandbox();
 
