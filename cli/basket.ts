@@ -473,7 +473,7 @@ export function formatReport(outcome: BasketOutcome): string {
       const { plan, change } = outcome;
       const placed = `The order for ${saturday(plan.weekStart)} is already placed`;
       if (!filledBefore(plan)) {
-        return [`${placed}, so nothing was added to Mijn lijst.\n`, formatLinks(change), formatShoppingList(plan, change)].join("");
+        return [`${placed}, so nothing was added to Mijn lijst.\n`, formatLinks(change), formatShoppingList(plan, change, "Shopping list")].join("");
       }
       if (unchanged(change)) return `${placed} and has what the Week Menu needs: nothing to change.\n`;
       return [
@@ -487,24 +487,17 @@ export function formatReport(outcome: BasketOutcome): string {
     }
     case "AH down": {
       const { plan, change } = outcome;
-      return [
-        "AH ordering is down, so nothing was added to Mijn lijst. The shopping list is in the Week Menu's ## Basket section:\n",
-        shoppingList(plan, change).join("\n") + "\n",
-        change.remove.length || change.removeNotes.length
-          ? group("No longer needed, remove these from Mijn lijst by hand", [
-              ...change.remove.map((p) => `${p.quantity} × ${p.title}`),
-              ...change.removeNotes.map((note) => `Note: ${note}`),
-            ])
-          : "",
-        group("Optional, not added", plan.optional),
-        `Have at home: ${plan.haveAtHome.join(", ") || "none"}\n`,
-      ].join("");
+      return formatShoppingList(
+        plan,
+        change,
+        "AH ordering is down, so nothing was added to Mijn lijst. The shopping list is in the Week Menu's ## Basket section",
+      );
     }
     case "login failed":
       return [
         "The AH login failed again, so nothing was added to Mijn lijst.\n",
         formatLinks(outcome.change),
-        formatShoppingList(outcome.plan, outcome.change),
+        formatShoppingList(outcome.plan, outcome.change, "Shopping list"),
       ].join("");
   }
 }
@@ -549,11 +542,13 @@ function formatLinks(change: BasketChange): string {
   ].join("");
 }
 
-/** The products to add and the unmatched items, grouped for shopping by hand. */
-function formatShoppingList(plan: BasketPlan, change: BasketChange): string {
+/** Under `heading`, the products to add and the unmatched items, grouped for shopping by hand; then what an earlier run added that is no longer needed. */
+function formatShoppingList(plan: BasketPlan, change: BasketChange, heading: string): string {
+  const noLongerNeeded = [...change.remove.map((p) => `${p.quantity} × ${p.title}`), ...change.removeNotes.map((note) => `Note: ${note}`)];
   return [
-    "Shopping list:\n",
+    `${heading}:\n`,
     shoppingList(plan, change).join("\n") + "\n",
+    noLongerNeeded.length ? group("No longer needed, remove these from Mijn lijst by hand", noLongerNeeded) : "",
     group("Optional, not added", plan.optional),
     `Have at home: ${plan.haveAtHome.join(", ") || "none"}\n`,
   ].join("");
