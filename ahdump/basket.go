@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 )
@@ -14,6 +16,13 @@ const basketQuery = `query FamilyFoodBasket {
   basket {
     itemsInList { id quantity originCode product { id title priceV2 { now { amount } } } }
     notes { description quantity originCode }
+  }
+}`
+
+// The open orders (checked out, or reopened for changes) with their delivery slot, as appie-go's GetFulfillments asks for them.
+const openOrdersQuery = `query FamilyFoodOpenOrders {
+  orderFulfillments(status: OPEN) {
+    result { orderId statusCode statusDescription shoppingType modifiable delivery { status slot { date startTime endTime } } }
   }
 }`
 
@@ -47,6 +56,26 @@ func (a *ah) basket(ctx context.Context) (json.RawMessage, error) {
 		return nil, a.userError("reading Mijn lijst", err)
 	}
 	return result.Basket, nil
+}
+
+// openOrders returns the open orders as AH's GraphQL `orderFulfillments(status: OPEN)` returns them.
+func (a *ah) openOrders(ctx context.Context) (json.RawMessage, error) {
+	c, err := a.userClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var result struct {
+		OrderFulfillments struct {
+			Result json.RawMessage `json:"result"`
+		} `json:"orderFulfillments"`
+	}
+	if err := c.DoGraphQL(ctx, openOrdersQuery, nil, &result); err != nil {
+		return nil, a.userError("reading the open orders", err)
+	}
+	if len(result.OrderFulfillments.Result) == 0 || string(result.OrderFulfillments.Result) == "null" {
+		return json.RawMessage("[]"), nil
+	}
+	return result.OrderFulfillments.Result, nil
 }
 
 // addToBasket adds products through basketItemsAdd and free-text notes through the shopping list's v2 PATCH
@@ -95,10 +124,19 @@ func (a *ah) addToBasket(ctx context.Context, add basketAdditions) (json.RawMess
 	return a.basket(ctx)
 }
 
-// userError turns a 401 into errLogin, so the CLI asks for a new login.
+// userError turns a 401 into errLogin, so the CLI asks for a new login, and AH not answering into errDown.
 func (a *ah) userError(doing string, err error) error {
 	if a.transport.lastStatus() == http.StatusUnauthorized {
 		return fmt.Errorf("%w (%v)", errLogin, err)
+	}
+	return a.downError(doing, err)
+}
+
+// downError turns a server error or no answer at all into errDown, so the CLI falls back to a shopping list.
+func (a *ah) downError(doing string, err error) error {
+	var netErr net.Error
+	if status := a.transport.lastStatus(); status >= 500 || (status == 0 && errors.As(err, &netErr)) {
+		return fmt.Errorf("%s: %w (%v)", doing, errDown, err)
 	}
 	return fmt.Errorf("%s: %w", doing, err)
 }

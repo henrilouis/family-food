@@ -6,7 +6,7 @@ import { AhLoginError, type AhBasket, type AhBasketAdditions, type AhClient } fr
 import { fakeAhClient } from "./fake.ts";
 import { previouslyBought, rankProducts, type Amount, type Product } from "./products.ts";
 
-export { AhError, AhLoginError } from "./client.ts";
+export { AhError, AhLoginError, AhUnavailableError } from "./client.ts";
 export { parseAmount, type Amount, type Product } from "./products.ts";
 export type { AhBasketAdditions as BasketAdditions } from "./client.ts";
 
@@ -40,6 +40,11 @@ export interface AhGateway {
    * Returns Mijn lijst after. Needs the login.
    */
   addToBasket(additions: AhBasketAdditions): Promise<Basket>;
+  /**
+   * The order for delivery on `date` (YYYY-MM-DD) once it is placed: checked out, or reopened for changes.
+   * Null while that Saturday's Basket is still only Mijn lijst. Needs the login.
+   */
+  placedOrder(date: string): Promise<{ id: number; status: string } | null>;
 }
 
 /** The AH gateway: the fake when the local config names a folder for it in `fakes.ah`, the real AH otherwise. */
@@ -75,6 +80,11 @@ export function ahGateway(config: Config): AhGateway {
     async addToBasket(additions) {
       if (!(await loggedIn())) throw new AhLoginError();
       return basket(await client.addToBasket(additions));
+    },
+    async placedOrder(date) {
+      if (!(await loggedIn())) throw new AhLoginError();
+      const order = (await client.openOrders()).find((o) => o.delivery?.slot?.date === date);
+      return order ? { id: order.orderId, status: order.delivery?.status ?? "OPEN" } : null;
     },
   };
 }

@@ -1,18 +1,21 @@
 import { execFile, spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { AhError, AhLoginError, type AhBasket, type AhClient, type AhProduct } from "./client.ts";
+import { AhError, AhLoginError, AhUnavailableError, type AhBasket, type AhClient, type AhOrder, type AhProduct } from "./client.ts";
 
 /** Built by `npm run build:ahdump` from `ahdump/` in this repo. */
 const binary = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../ahdump/ahdump");
 
 /** ahdump's exit code when the user token is missing, or AH refused to renew it. */
 const loginExitCode = 3;
+/** ahdump's exit code when AH didn't answer or answered with a server error. */
+const unavailableExitCode = 4;
 
 const notBuilt = () => new AhError("The AH client isn't built. Run `npm run build:ahdump` (needs Go).");
 
 function failure(code: number | null, stderr: string): Error {
   if (code === loginExitCode) return new AhLoginError("AH login expired. Run `food ah login` again.");
+  if (code === unavailableExitCode) return new AhUnavailableError(`AH is not answering: ${stderr.trim()}`);
   return new AhError(`The AH client failed: ${stderr.trim() || `exit code ${code}`}`);
 }
 
@@ -46,5 +49,6 @@ export function ahdumpClient(tokenFile: string): AhClient {
       products(["search", "-token", "user", "-sort", "PURCHASE_FREQUENCY", "--", query]),
     basket: async (): Promise<AhBasket> => JSON.parse(await ahdump(["basket"])),
     addToBasket: async (additions): Promise<AhBasket> => JSON.parse(await ahdump(["basket-add"], JSON.stringify(additions))),
+    openOrders: async (): Promise<AhOrder[]> => JSON.parse(await ahdump(["orders"])),
   };
 }
