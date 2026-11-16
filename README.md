@@ -33,6 +33,8 @@ food ah login                             # once, in your browser
 food ah search kikkererwten --need 400g   # cleaned up, cheapest per kg first
 food ah bought melk                       # what the household bought before
 food ah basket                            # Mijn lijst as JSON
+food ah recipes linzen --season winter    # Allerhande's vegetarian main courses, with ratings (JSON)
+food ah suggestions <allerhande url>      # AH's product for each ingredient of an Allerhande recipe (JSON)
 food basket lines --week 2026-11-21       # the week's ingredient lines with their Pinned Products (JSON)
 food products pin pins.json               # add or replace Pinned Products in Products.md
 food basket fill --week 2026-11-21 matches.json   # see samples/basket/ for the matches format
@@ -69,7 +71,7 @@ food recipe fetch https://cookieandkate.com/best-lentil-soup-recipe/   # the pag
 food recipe published "Best Lentil Soup"                                # is it on a published Week Menu?
 ```
 
-`food recipe fetch` says who it is (an honest User-Agent) and never fetches from NYT Cooking, Serious Eats or The Guardian, whose robots.txt blocks AI agents; paste those recipes instead. Allerhande pages aren't supported yet. Under tests it fetches only from local test pages.
+`food recipe fetch` says who it is (an honest User-Agent) and never fetches from NYT Cooking, Serious Eats or The Guardian, whose robots.txt blocks AI agents; paste those recipes instead. Allerhande recipes (`ah.nl/allerhande/recept/R-R…`) are read through AH's app API instead, because ah.nl blocks automated reads of its pages. Under tests it fetches only from local test pages.
 
 ## Planning the week
 
