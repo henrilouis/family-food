@@ -15,6 +15,21 @@ export type AhProduct = {
   isPreviouslyBought?: boolean;
 };
 
+/** Mijn lijst (the Basket) as AH's GraphQL `basket` query returns it. Only the fields the gateway reads. */
+export type AhBasket = {
+  itemsInList?: {
+    quantity: number;
+    product: { id: number; title: string; priceV2?: { now?: { amount: number } | null } | null };
+  }[] | null;
+  notes?: { description: string; quantity: number }[] | null;
+};
+
+/** What to add to Mijn lijst: products by webshop id, and free-text notes. Quantities are added to what is there. */
+export type AhBasketAdditions = {
+  products: { id: number; quantity: number }[];
+  notes: { description: string; quantity: number }[];
+};
+
 /**
  * AH's unofficial app API, as raw as AH returns it: the part of the AH gateway that is swapped for a fake.
  * The real one runs the Go `ahdump` tool; the fake keeps its state in JSON files.
@@ -29,6 +44,10 @@ export interface AhClient {
   searchProducts(query: string, token: "anonymous" | "user"): Promise<AhProduct[]>;
   /** Product search with the user token, most frequently bought first (`sortOn=PURCHASE_FREQUENCY`). */
   searchByPurchaseFrequency(query: string): Promise<AhProduct[]>;
+  /** Mijn lijst, with the user token. */
+  basket(): Promise<AhBasket>;
+  /** Adds products (GraphQL `basketItemsAdd`, which adds to the quantity already there) and free-text notes; returns Mijn lijst after. */
+  addToBasket(additions: AhBasketAdditions): Promise<AhBasket>;
 }
 
 /** A problem with AH that the person running `food` can act on; printed without a stack trace. */
