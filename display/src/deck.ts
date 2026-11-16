@@ -1,6 +1,6 @@
 // The Kitchen Display's view logic: from a display bundle and the time, the deck of screens to show.
 import type { DisplayBundle, IngredientGroup, MenuDay } from "../../bundle/bundle.ts";
-import { addDays, kitchenDate } from "../../bundle/kitchen-day.ts";
+import { kitchenDate } from "../../bundle/kitchen-day.ts";
 
 export type IngredientList = {
   heading: string | null;
@@ -14,13 +14,10 @@ export type IngredientsScreen = {
   /** e.g. "Mon 23 Nov" */
   day: string;
   title: string;
-  /** e.g. "Novel · first time", "Double: cook for Tue too" */
+  /** e.g. "Novel · first time" */
   tags: string[];
-  /** The Side's title, if the dinner has one. */
-  side: string | null;
+  side: { title: string; ingredients: IngredientList[] } | null;
   ingredients: IngredientList[];
-  /** The Side's ingredients, the first group headed with the Side's title. */
-  sideIngredients: IngredientList[];
 };
 
 /** A day with nothing to cook. */
@@ -32,7 +29,6 @@ export type MessageScreen = {
 
 export type Deck = {
   screens: Screen[];
-  /** The index of the screen to show. */
   current: number;
 };
 
@@ -44,15 +40,11 @@ function dayLabel(date: string): string {
   return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
 }
 
-const list = (groups: IngredientGroup[]): IngredientList[] =>
+const ingredientLists = (groups: IngredientGroup[]): IngredientList[] =>
   groups.map((g) => ({ heading: g.heading, items: g.items.map((it) => ({ amount: it.amount?.text ?? null, text: it.text })) }));
 
-function tags(day: MenuDay): string[] {
-  const tags: string[] = [];
-  if (day.novel) tags.push("Novel · first time");
-  if (day.double === "cook") tags.push(`Double: cook for ${dayLabel(addDays(day.date, 1)).split(" ")[0]} too`);
-  return tags;
-}
+// The Double tag waits for doubled amounts (#20): without them it would tell the cook to cook for two days from a single list.
+const tags = (day: MenuDay): string[] => (day.novel ? ["Novel · first time"] : []);
 
 export function buildDeck(bundle: DisplayBundle, now: Date): Deck {
   const today = kitchenDate(now);
@@ -65,15 +57,12 @@ function todayScreen(bundle: DisplayBundle, today: string, day: MenuDay | undefi
   if (!day.dinner) return { kind: "message", day: dayLabel(today), message: "Free Day" };
   const recipe = bundle.recipes[day.dinner];
   const side = day.side ? bundle.recipes[day.side] : null;
-  const sideIngredients = side ? list(side.ingredients) : [];
-  if (side && sideIngredients[0]) sideIngredients[0].heading ??= side.title;
   return {
     kind: "ingredients",
     day: dayLabel(day.date),
     title: recipe.title,
     tags: tags(day),
-    side: side?.title ?? null,
-    ingredients: list(recipe.ingredients),
-    sideIngredients,
+    side: side && { title: side.title, ingredients: ingredientLists(side.ingredients) },
+    ingredients: ingredientLists(recipe.ingredients),
   };
 }

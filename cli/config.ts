@@ -4,7 +4,6 @@ import path from "node:path";
 
 // The local config lives outside the Recipe Vault, in the user's Application Support folder.
 export type Config = {
-  /** Absolute path of the Recipe Vault. */
   vault?: string;
 };
 

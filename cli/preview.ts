@@ -8,7 +8,6 @@ import { buildBundle } from "./build-bundle.ts";
 
 const display = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../display");
 
-/** The page's script, bundled from its TypeScript. */
 async function buildPageScript(): Promise<string> {
   const result = await build({
     entryPoints: [path.join(display, "src/main.ts")],
@@ -21,25 +20,26 @@ async function buildPageScript(): Promise<string> {
 }
 
 type Options = { vault: string; port: number; lan: boolean; now: () => Date };
+type Route = { contentType: string; body: () => Promise<string> };
 
 /** Serves the Kitchen Display page and a bundle freshly built from the Recipe Vault on every request. */
 export function preview({ vault, port, lan, now }: Options): void {
-  const files: Record<string, [string, () => Promise<string>]> = {
-    "/": ["text/html; charset=utf-8", () => readFile(path.join(display, "index.html"), "utf8")],
-    "/style.css": ["text/css; charset=utf-8", () => readFile(path.join(display, "style.css"), "utf8")],
-    "/page.js": ["text/javascript; charset=utf-8", buildPageScript],
-    "/bundle.json": ["application/json; charset=utf-8", async () => JSON.stringify(await buildBundle(vault, now()))],
+  const routes: Record<string, Route> = {
+    "/": { contentType: "text/html; charset=utf-8", body: () => readFile(path.join(display, "index.html"), "utf8") },
+    "/style.css": { contentType: "text/css; charset=utf-8", body: () => readFile(path.join(display, "style.css"), "utf8") },
+    "/page.js": { contentType: "text/javascript; charset=utf-8", body: buildPageScript },
+    "/bundle.json": { contentType: "application/json; charset=utf-8", body: async () => JSON.stringify(await buildBundle(vault, now())) },
   };
 
   const server = http.createServer(async (req, res) => {
-    const file = files[new URL(req.url ?? "/", "http://localhost").pathname];
-    if (!file) {
+    const route = routes[new URL(req.url ?? "/", "http://localhost").pathname];
+    if (!route) {
       res.writeHead(404, { "content-type": "text/plain" }).end("Not found");
       return;
     }
     try {
-      const body = await file[1]();
-      res.writeHead(200, { "content-type": file[0], "cache-control": "no-store" }).end(body);
+      const body = await route.body();
+      res.writeHead(200, { "content-type": route.contentType, "cache-control": "no-store" }).end(body);
     } catch (error) {
       process.stderr.write(`${req.url}: ${(error as Error).message}\n`);
       res.writeHead(500, { "content-type": "text/plain; charset=utf-8" }).end(String((error as Error).message));

@@ -1,4 +1,4 @@
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
 import { sandbox } from "./harness.ts";
@@ -12,6 +12,7 @@ describe("food bundle", () => {
     expect(result.code).toBe(0);
     await expect(result.stdout).toMatchFileSnapshot("../../samples/bundles/published-2026-11-20.json");
   });
+
   test("builds a schema-versioned display bundle stamped with the publish time", async () => {
     const { run } = await sandbox();
 
@@ -25,14 +26,14 @@ describe("food bundle", () => {
   });
 
   test("holds every Week Menu that ends on or after today, with its days in order", async () => {
-    const { run } = await sandbox();
+    const { bundle } = await sandbox();
 
-    const onFriday = JSON.parse((await run(["bundle"], { now: "2026-11-20T18:00" })).stdout);
-    const onSaturday = JSON.parse((await run(["bundle"], { now: "2026-11-21T10:00" })).stdout);
+    const onFriday = await bundle("2026-11-20T18:00");
+    const onSaturday = await bundle("2026-11-21T10:00");
 
-    expect(onFriday.weekMenus.map((w: { weekStart: string }) => w.weekStart)).toEqual(["2026-11-14", "2026-11-21"]);
-    expect(onSaturday.weekMenus.map((w: { weekStart: string }) => w.weekStart)).toEqual(["2026-11-21"]);
-    expect(onSaturday.weekMenus[0].days.map((d: { date: string; dinner: string; side: string }) => [d.date, d.dinner, d.side])).toEqual([
+    expect(onFriday.weekMenus.map((w) => w.weekStart)).toEqual(["2026-11-14", "2026-11-21"]);
+    expect(onSaturday.weekMenus.map((w) => w.weekStart)).toEqual(["2026-11-21"]);
+    expect(onSaturday.weekMenus[0].days.map((d) => [d.date, d.dinner, d.side])).toEqual([
       ["2026-11-21", "Dahl", null],
       ["2026-11-22", "Vegetable Biryani", null],
       ["2026-11-23", "Dahl", "Naan"],
@@ -44,19 +45,49 @@ describe("food bundle", () => {
   });
 
   test("keeps last week's Week Menu until 03:00 on Saturday, when the Kitchen Display moves to the new week", async () => {
-    const { run } = await sandbox();
+    const { bundle } = await sandbox();
 
-    const bundle = JSON.parse((await run(["bundle"], { now: "2026-11-21T02:30" })).stdout);
+    const { weekMenus } = await bundle("2026-11-21T02:30");
 
-    expect(bundle.weekMenus.map((w: { weekStart: string }) => w.weekStart)).toEqual(["2026-11-14", "2026-11-21"]);
+    expect(weekMenus.map((w) => w.weekStart)).toEqual(["2026-11-14", "2026-11-21"]);
   });
 
-  test("marks the Novel Recipe's day and the Double cook and 2nd days", async () => {
-    const { run } = await sandbox();
+  test("dates each dinner by the weekday in its Day column, not by its row", async () => {
+    const { bundle, vault } = await sandbox();
+    const note = path.join(vault, "Week menus/Week 2026-11-21.md");
+    const text = await readFile(note, "utf8");
+    const [sat, sun, mon] = text.split("\n").filter((l) => /^\| (Sat|Sun|Mon) /.test(l));
+    await writeFile(note, text.replace(`${sat}\n${sun}\n${mon}\n`, `${mon}\n${sat}\n`));
 
-    const { weekMenus } = JSON.parse((await run(["bundle"], { now: "2026-11-21T10:00" })).stdout);
+    const { weekMenus } = await bundle("2026-11-21T10:00");
 
-    expect(weekMenus[0].days.map((d: { novel: boolean; double: string | null }) => [d.novel, d.double])).toEqual([
+    expect(weekMenus[0].days.slice(0, 3).map((d) => [d.date, d.dinner, d.side])).toEqual([
+      ["2026-11-21", "Dahl", null],
+      ["2026-11-23", "Dahl", "Naan"],
+      ["2026-11-24", "Dahl", null],
+    ]);
+    expect(weekMenus[0].days).toHaveLength(6);
+  });
+
+  test("names the Week Menu note when a Day can't be read", async () => {
+    const { run, vault } = await sandbox();
+    const note = path.join(vault, "Week menus/Week 2026-11-21.md");
+    await writeFile(note, (await readFile(note, "utf8")).replace("| Sun 22 Nov |", "| Day 2      |"));
+
+    const result = await run(["bundle"], { now: "2026-11-21T10:00" });
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("Week 2026-11-21.md");
+    expect(result.stderr).toContain(`"Day 2"`);
+    expect(result.stderr).not.toContain("    at ");
+  });
+
+  test("marks the Novel Recipe's day and the Double Recipe's cook and 2nd days", async () => {
+    const { bundle } = await sandbox();
+
+    const { weekMenus } = await bundle("2026-11-21T10:00");
+
+    expect(weekMenus[0].days.map((d) => [d.novel, d.double])).toEqual([
       [false, null],
       [true, null],
       [false, "cook"],
@@ -68,22 +99,22 @@ describe("food bundle", () => {
   });
 
   test("holds only the Recipes and Sides the Week Menus use", async () => {
-    const { run, vault } = await sandbox();
+    const { bundle, vault } = await sandbox();
     await writeFile(path.join(vault, "Sides/Lime rice.md"), "# Lime rice\n\n## Ingredients\n\n- *200 g* basmati rice\n");
 
-    const bundle = JSON.parse((await run(["bundle"], { now: "2026-11-21T10:00" })).stdout);
+    const { recipes } = await bundle("2026-11-21T10:00");
 
-    expect(Object.keys(bundle.recipes).sort()).toEqual(["Dahl", "Naan", "Vegetable Biryani"]);
-    expect(bundle.recipes["Vegetable Biryani"].title).toBe("Vegetable Biryani");
+    expect(Object.keys(recipes).sort()).toEqual(["Dahl", "Naan", "Vegetable Biryani"]);
+    expect(recipes["Vegetable Biryani"].title).toBe("Vegetable Biryani");
   });
 
   test("gives each Recipe its ingredient list, with the italic amounts as numbers and units", async () => {
-    const { run } = await sandbox();
+    const { bundle } = await sandbox();
 
-    const { recipes } = JSON.parse((await run(["bundle"], { now: "2026-11-21T10:00" })).stdout);
+    const { recipes } = await bundle("2026-11-21T10:00");
 
     const dahl = recipes["Dahl"].ingredients;
-    expect(dahl.map((g: { heading: string | null }) => g.heading)).toEqual([null, "To serve"]);
+    expect(dahl.map((g) => g.heading)).toEqual([null, "To serve"]);
     expect(dahl[0].items[0]).toEqual({ amount: { text: "300g", quantity: 300, unit: "g" }, text: "red split lentils" });
     expect(dahl[0].items[2]).toEqual({ amount: { text: "1 large", quantity: 1, unit: "large" }, text: "onion, finely chopped" });
     expect(dahl[0].items.at(-1)).toEqual({ amount: null, text: "salt and pepper" });

@@ -4,6 +4,7 @@ import { parseArgs } from "node:util";
 import { buildBundle } from "./build-bundle.ts";
 import { readConfig, writeConfig } from "./config.ts";
 import { preview } from "./preview.ts";
+import { VaultError } from "./vault.ts";
 
 const usage = `Usage: food <command>
 
@@ -60,6 +61,7 @@ async function main(args: string[]): Promise<void> {
 }
 
 main(process.argv.slice(2)).catch((error) => {
-  process.stderr.write(error instanceof UsageError ? error.message.trimEnd() + "\n" : `${error.stack ?? error}\n`);
+  const expected = error instanceof UsageError || error instanceof VaultError;
+  process.stderr.write(expected ? error.message.trimEnd() + "\n" : `${error.stack ?? error}\n`);
   process.exitCode = 1;
 });

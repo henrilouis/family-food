@@ -18,19 +18,22 @@ async function preview() {
 }
 
 describe("food preview", () => {
-  test("serves the Kitchen Display page and its script", async () => {
+  test("serves the Kitchen Display page with the script and stylesheet it links to", async () => {
     const { url } = await preview();
 
     const page = await fetch(url);
     const html = await page.text();
-    const script = await fetch(new URL("page.js", url));
+    const linked = [...html.matchAll(/(?:src|href)="([^"]+)"/g)].map((m) => m[1]);
+    const responses = await Promise.all(linked.map((file) => fetch(new URL(file, url))));
 
     expect(page.status).toBe(200);
     expect(page.headers.get("content-type")).toContain("text/html");
-    expect(html).toContain(`<script src="page.js"`);
-    expect(script.status).toBe(200);
-    expect(script.headers.get("content-type")).toContain("javascript");
-    expect(await script.text()).toContain("bundle.json");
+    expect(responses.map((r) => [r.status, r.headers.get("content-type")?.split(";")[0]])).toEqual(
+      expect.arrayContaining([
+        [200, "text/javascript"],
+        [200, "text/css"],
+      ]),
+    );
   });
 
   test("serves a bundle built from the Recipe Vault as it is now", async () => {

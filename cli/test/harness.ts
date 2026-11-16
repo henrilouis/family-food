@@ -3,6 +3,7 @@ import { cp, mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import type { DisplayBundle } from "../../bundle/bundle.ts";
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const food = path.join(repo, "cli/food.ts");
@@ -15,6 +16,8 @@ export type Sandbox = {
   vault: string;
   /** Runs the real `food` CLI. `now` is local time, e.g. "2026-11-21T10:00". */
   run(args: string[], options?: { now?: string }): Promise<RunResult>;
+  /** Runs `food bundle` at local time `now` and parses the bundle it prints. */
+  bundle(now: string): Promise<DisplayBundle>;
   /** Starts a long-running `food` command and resolves once it printed a line matching `ready`. */
   start(args: string[], ready: RegExp, options?: { now?: string }): Promise<{ process: ChildProcess; match: RegExpMatchArray }>;
 };
@@ -53,9 +56,15 @@ export async function sandbox({ configured = true } = {}): Promise<Sandbox> {
       child.on("exit", (code) => reject(new Error(`food ${args.join(" ")} exited with ${code}:\n${out}`)));
     });
 
+  const bundle: Sandbox["bundle"] = async (now) => {
+    const result = await run(["bundle"], { now });
+    if (result.code !== 0) throw new Error(`food bundle exited with ${result.code}:\n${result.stderr}`);
+    return JSON.parse(result.stdout);
+  };
+
   if (configured) {
     const result = await run(["config", "vault", vault]);
     if (result.code !== 0) throw new Error(`could not configure the sample vault:\n${result.stderr}`);
   }
-  return { vault, run, start };
+  return { vault, run, bundle, start };
 }
