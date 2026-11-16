@@ -17,6 +17,8 @@ The conversation is the draft. Until the adult says "lock it", the only writes a
 | Weekday active time | `active_minutes` ≤ **45** on weekday cook days (hard) |
 | Weekday total time | `total_minutes` ≤ **75** on weekday cook days (soft; a starting value, to tune) |
 | Novel Recipe candidates | **3** |
+| Rejected site | **2** or more 👎 and no 👍 in `food plan sites`: skip its recipes (a starting value, to tune) |
+| Poorly rated recipe | below **3.5** of 5 with at least **10** ratings: skip it; fewer ratings or none count as unrated, never marked down (starting values, to tune) |
 | Novel Recipe slot | **Sunday**; Monday when it is cooked as a Double |
 | Order deadline | Friday **12:00** before the week's Saturday |
 
