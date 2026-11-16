@@ -49,6 +49,21 @@ describe("food preview", () => {
     expect(after.recipes["Dahl"].title).toBe("Red lentil dahl");
   });
 
+  test("serves the bundle's version file, whose hash follows the Recipe Vault", async () => {
+    const { url, vault } = await preview();
+    const version = async () => (await fetch(new URL("version.json", url))).json();
+
+    const first = await version();
+    const again = await version();
+    const dahl = path.join(vault, "Meals/Dahl.md");
+    await writeFile(dahl, (await readFile(dahl, "utf8")).replace("# Dahl", "# Red lentil dahl"));
+    const changed = await version();
+
+    expect(first).toEqual({ hash: expect.any(String) });
+    expect(again).toEqual(first);
+    expect(changed.hash).not.toBe(first.hash);
+  });
+
   test("answers 404 for anything else", async () => {
     const { url } = await preview();
 
