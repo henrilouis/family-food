@@ -60,6 +60,17 @@ _Avoid_: Regulars, basics
 The not-yet-placed Albert Heijn order, filled from the Week Menu and Staples and checked out by a human.
 _Avoid_: Cart, order (before checkout)
 
+**Pinned Product**:
+The Albert Heijn product remembered for a recipe ingredient or a Staple, bought without asking again.
+_Avoid_: Mapping, match
+
+**Cupboard Ingredient**:
+A long-life recipe ingredient (tins, dried legumes, rice, less common spices) that the household is asked about each time a Basket is filled, because it may already be in the house. Unlike an Ask Staple, it is needed for a dinner.
+_Avoid_: Pantry item
+
+**Always in House**:
+Said of a recipe ingredient that is never bought or asked about (salt, oil, everyday spices) until someone says it is running low.
+
 ### Kitchen
 
 **Kitchen Display**:
