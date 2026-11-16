@@ -90,6 +90,77 @@ describe("food vault check", () => {
       expect(result.code).toBe(0);
     });
   });
+
+  describe("warnings, which don't fail the check", () => {
+    test("a Meal property outside the Meal property set", async () => {
+      const { run, vault } = await sandbox();
+      await edit(vault, "Meals/Dahl.md", "reviewed: true", "reviewed: true\nrating: 5");
+
+      const result = await run(["vault", "check"]);
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toMatch(/warning .*Meals\/Dahl\.md: .*"rating"/);
+      expect(result.stdout).toContain("0 errors, 1 warning");
+    });
+
+    test("a Meal with no cuisine", async () => {
+      const { run, vault } = await sandbox();
+      await edit(vault, "Meals/Dahl.md", "cuisine: Indian\n", "");
+      await edit(vault, "Meals/Vegetable Biryani.md", "cuisine: Indian", "cuisine:");
+
+      const result = await run(["vault", "check"]);
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toMatch(/warning .*Meals\/Dahl\.md: .*no cuisine/);
+      expect(result.stdout).toMatch(/warning .*Meals\/Vegetable Biryani\.md: .*no cuisine/);
+    });
+
+    test("a cuisine or base outside the fixed lists", async () => {
+      const { run, vault } = await sandbox();
+      await edit(vault, "Meals/Dahl.md", "cuisine: Indian", "cuisine: Nepalese");
+      await edit(vault, "Meals/Vegetable Biryani.md", "  - rice", "  - rice\n  - couscous");
+
+      const result = await run(["vault", "check"]);
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toMatch(/warning .*Meals\/Dahl\.md: .*cuisine "Nepalese"/);
+      expect(result.stdout).toMatch(/warning .*Meals\/Vegetable Biryani\.md: .*base "couscous"/);
+      expect(result.stdout).toContain("0 errors, 2 warnings");
+    });
+
+    test("takes the fixed cuisine and base lists from docs/meal-properties.md", async () => {
+      const doc = await readFile(path.join(import.meta.dirname, "../../docs/meal-properties.md"), "utf8");
+      const listed = (property: string) => {
+        const section = doc.split(/^## /m).find((s) => s.startsWith(`\`${property}\``)) ?? "";
+        return [...section.matchAll(/^- (.+)$/gm)].map((m) => m[1].trim());
+      };
+      const cuisines = listed("cuisine");
+      const bases = listed("base");
+      expect(cuisines).toContain("Southeast Asian");
+      expect(bases).toContain("bread/wrap");
+      const { run, vault } = await sandbox();
+      for (let i = 0; i < Math.max(cuisines.length, bases.length); i++) {
+        const properties = `cuisine: ${cuisines[i % cuisines.length]}\nbase:\n  - ${bases[i % bases.length]}`;
+        await writeFile(path.join(vault, `Meals/Meal ${i}.md`), `---\n${properties}\n---\n# Meal ${i}\n`);
+      }
+
+      const result = await run(["vault", "check"]);
+
+      expect(result.stdout).toContain("0 errors, 0 warnings");
+    });
+
+    test("a Meal that serves more than 6, probably still written for two dinners", async () => {
+      const { run, vault } = await sandbox();
+      await edit(vault, "Meals/Dahl.md", "serves: 4", "serves: 8");
+      await edit(vault, "Meals/Vegetable Biryani.md", "serves: 5", "serves: 6");
+
+      const result = await run(["vault", "check"]);
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toMatch(/warning .*Meals\/Dahl\.md: .*serves 8/);
+      expect(result.stdout).toContain("0 errors, 1 warning");
+    });
+  });
 });
 
 /** Replaces `from` with `to` in a vault note, failing if `from` isn't there. */

@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { MenuDay } from "../bundle/bundle.ts";
 import { parseAmount } from "./amount.ts";
@@ -13,6 +14,7 @@ export async function checkVault(vault: string): Promise<VaultCheck> {
   const check: VaultCheck = { errors: [], warnings: [] };
   const relative = (note: Note) => path.relative(vault, note.file);
   const error = (note: Note, message: string) => check.errors.push({ file: relative(note), message });
+  const warning = (note: Note, message: string) => check.warnings.push({ file: relative(note), message });
 
   for (const note of await readWeekMenuNotes(vault)) {
     let days: MenuDay[];
@@ -36,12 +38,51 @@ export async function checkVault(vault: string): Promise<VaultCheck> {
     }
   }
 
+  const lists = await readFixedLists();
   for (const folder of RECIPE_NOTE_FOLDERS) {
     for (const note of await readNotes(path.join(vault, folder))) {
       for (const message of amountProblems(note)) error(note, message);
+      if (folder === "Meals") for (const message of mealPropertyProblems(note, lists)) warning(note, message);
     }
   }
   return check;
+}
+
+const MEAL_PROPERTIES = ["serves", "active_minutes", "total_minutes", "cuisine", "base", "double", "source", "sides", "novel", "reviewed"];
+
+/** The doc in this repo that holds the fixed `cuisine` and `base` lists. */
+export const MEAL_PROPERTIES_DOC = path.resolve(import.meta.dirname, "../docs/meal-properties.md");
+
+type FixedLists = { cuisine: string[]; base: string[] };
+
+/** The `- ` items under the doc's "## `cuisine` values" and "## `base` values" headings. */
+async function readFixedLists(): Promise<FixedLists> {
+  const sections = (await readFile(MEAL_PROPERTIES_DOC, "utf8")).split(/^## /m);
+  const listed = (property: string) => {
+    const section = sections.find((s) => s.startsWith(`\`${property}\``));
+    if (!section) throw new Error(`${MEAL_PROPERTIES_DOC} has no "## \`${property}\` values" section`);
+    return [...section.matchAll(/^- (.+)$/gm)].map((m) => m[1].trim());
+  };
+  return { cuisine: listed("cuisine"), base: listed("base") };
+}
+
+function mealPropertyProblems(note: Note, lists: FixedLists): string[] {
+  const problems: string[] = [];
+  for (const key of Object.keys(note.properties)) {
+    if (!MEAL_PROPERTIES.includes(key)) problems.push(`the property "${key}" isn't a Meal property (${MEAL_PROPERTIES.join(", ")})`);
+  }
+  const { cuisine, base, serves } = note.properties;
+  if (cuisine === undefined || cuisine === null || cuisine === "") problems.push("no cuisine");
+  else if (!lists.cuisine.includes(String(cuisine))) {
+    problems.push(`cuisine "${cuisine}" isn't in the fixed list (${lists.cuisine.join(", ")})`);
+  }
+  for (const value of base === undefined || base === null ? [] : [base].flat()) {
+    if (!lists.base.includes(String(value))) problems.push(`base "${value}" isn't in the fixed list (${lists.base.join(", ")})`);
+  }
+  if (typeof serves === "number" && serves > 6) {
+    problems.push(`serves ${serves}, more than 6: is it still written for two dinners?`);
+  }
+  return problems;
 }
 
 /** Every folder that holds Recipes, including Baking, which no Week Menu links to. */
