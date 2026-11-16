@@ -59,7 +59,7 @@ food notes recipes-to-add --json               # URLs and pasted recipes in "Rec
 Ask the agent to add a recipe (a URL or pasted text), or to import "Recipes to add": the `add-recipe` skill (`.agents/skills/add-recipe/SKILL.md`) writes it to the vault in the template. It replaces the old work vault's copy of that skill. The CLI parts it uses:
 
 ```sh
-food recipe fetch https://cookieandkate.com/best-lentil-soup-recipe/   # the page's schema.org Recipe as JSON
+food recipe fetch https://cookieandkate.com/best-lentil-soup-recipe/   # the page's schema.org Recipe (and rating) as JSON
 food recipe published "Best Lentil Soup"                                # is it on a published Week Menu?
 ```
 
@@ -72,6 +72,7 @@ Say "plan the week" to the agent: the `planning-session` skill (`.agents/skills/
 ```sh
 food plan context                          # the week to plan, the Novel Recipe to review, the repeat window, the Meals (JSON)
 food plan verdict 2026-11-21 kept          # kept | rejected | "not cooked"
+food plan sites                            # each recipe site's Novel Recipes kept / rejected / not cooked, and its Meals (JSON)
 food recipe delete "Vegetable Biryani"     # after a confirmed 👎; the Week Menus keep its name as plain text
 food plan write plan.json                  # the Locked Week Menu note
 ```

@@ -83,6 +83,7 @@ describe("food recipe fetch", () => {
       category: "Main Course",
       diets: ["VegetarianDiet"],
       language: "en-US",
+      rating: { value: 4.9, count: 57 },
       ingredients: [
         "2 tablespoons extra-virgin olive oil",
         "1 cup diced yellow onion",
@@ -118,6 +119,7 @@ describe("food recipe fetch", () => {
       category: null,
       diets: [],
       language: "nl-NL",
+      rating: null,
       ingredients: ["1 pompoen", "300 gr risottorijst", "8 blaadjes salie"],
       steps: [
         { section: null, text: "Snijd de pompoen in blokjes." },
@@ -125,6 +127,16 @@ describe("food recipe fetch", () => {
         { section: null, text: "Kook de risotto en roer de pompoen erdoor." },
       ],
     });
+  });
+
+  test("puts a rating on another scale out of 5, counting reviews when the site gives no rating count", async () => {
+    const { run } = await sandbox();
+    const { url } = await site({ "/traybake/": { fixture: "no-steps.html" } });
+
+    const result = await run(["recipe", "fetch", url("/traybake/")]);
+
+    expect(result.code).toBe(0);
+    expect(JSON.parse(result.stdout).rating).toEqual({ value: 4.2, count: 12 });
   });
 
   test("gives no steps when the JSON-LD has none, for the skill to read them from the page", async () => {

@@ -62,8 +62,8 @@ Commands:
                         Deleting prints {"deleted", "notFound", "deleteByHand", "error"} with --json.
                         Exit 2 when Notes won't take the change: delete the "deleteByHand" items by hand.
                         (food publish also rewrites the "This week" note; a failure there only warns)
-  recipe fetch <url>    Read the schema.org Recipe on an open recipe site's page (JSON), fetched with
-                        an honest User-Agent. Exit 2: a site food never fetches from (NYT Cooking,
+  recipe fetch <url>    Read the schema.org Recipe on an open recipe site's page (JSON, with its rating out
+                        of 5 and how many rated it), fetched with an honest User-Agent. Exit 2: a site food never fetches from (NYT Cooking,
                         Serious Eats, The Guardian) or Allerhande: ask for the recipe text instead.
                         Exit 3: no recipe data (fetch failed or none on the page): read the page another way
   recipe published <name> [--json]
