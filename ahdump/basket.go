@@ -79,6 +79,24 @@ func (a *ah) openOrders(ctx context.Context) (json.RawMessage, error) {
 	return result.OrderFulfillments.Result, nil
 }
 
+// activeOrder returns the order open for changes in the AH app (picked when ordering from Mijn lijst, or reopened)
+// as AH's REST order summary returns it, or null when none is: AH answers 404 then (checked live 2026-11-16).
+// While there is one, basketItemsAdd puts products into it instead of Mijn lijst; notes still go to Mijn lijst.
+func (a *ah) activeOrder(ctx context.Context) (json.RawMessage, error) {
+	c, err := a.userClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var order json.RawMessage
+	if err := c.DoRequest(ctx, http.MethodGet, "/mobile-services/order/v1/summaries/active?sortBy=DEFAULT", nil, &order); err != nil {
+		if a.transport.lastStatus() == http.StatusNotFound {
+			return json.RawMessage("null"), nil
+		}
+		return nil, a.userError("reading the order open for changes", err)
+	}
+	return order, nil
+}
+
 // addToBasket adds products through basketItemsAdd and free-text notes through the shopping list's v2 PATCH
 // (the write albertheijn-mcp verified for notes on 2026-10-01), then returns Mijn lijst. It never removes anything.
 func (a *ah) addToBasket(ctx context.Context, add basketAdditions) (json.RawMessage, error) {

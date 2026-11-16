@@ -10,6 +10,11 @@ export function addDays(date: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Whether `date` falls in the Week Menu's week: from its Saturday `weekStart` to the Friday after (YYYY-MM-DD). */
+export function inWeek(weekStart: string, date: string | null | undefined): date is string {
+  return !!date && date >= weekStart && date <= addDays(weekStart, 6);
+}
+
 /** The local calendar date at `time`, as YYYY-MM-DD. */
 export function localDate(time: Date): string {
   return [time.getFullYear(), time.getMonth() + 1, time.getDate()].map((n) => String(n).padStart(2, "0")).join("-");

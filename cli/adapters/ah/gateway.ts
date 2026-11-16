@@ -1,6 +1,6 @@
 import { access, chmod, mkdir } from "node:fs/promises";
 import path from "node:path";
-import { addDays } from "../../../bundle/dates.ts";
+import { inWeek } from "../../../bundle/dates.ts";
 import { configDir, type Config } from "../../config.ts";
 import { ahdumpClient } from "./ahdump.ts";
 import type { RecipePage } from "../../recipe-page.ts";
@@ -29,6 +29,9 @@ export type Basket = {
   notes: { description: string; quantity: number }[];
 };
 
+/** An order open for changes in the AH app, with its products as in Mijn lijst. */
+export type OrderInFocus = { id: number; date: string; closes: Date | null; products: Basket["products"] };
+
 /**
  * Everything the `food` CLI does with Albert Heijn. It never removes items and never checks out.
  */
@@ -48,6 +51,7 @@ export interface AhGateway {
   readBasket(): Promise<Basket>;
   /**
    * Adds products and free-text notes to Mijn lijst; a product already there gets the quantity added to its line.
+   * While an order is open for changes (`orderInFocus`), AH puts the products into that order instead.
    * Returns Mijn lijst after. Needs the login.
    */
   addToBasket(additions: AhBasketAdditions): Promise<Basket>;
@@ -58,6 +62,12 @@ export interface AhGateway {
    * Null while the week's Basket is still only Mijn lijst. Needs the login.
    */
   placedOrder(weekStart: string): Promise<{ id: number; status: string; date: string } | null>;
+  /**
+   * The order open for changes in the AH app (picked when ordering from Mijn lijst, or reopened), or null when none
+   * is. While there is one, `addToBasket` puts the products into it instead of Mijn lijst; notes still go to
+   * Mijn lijst. `date` is its delivery day, `closes` when changes close (null when AH doesn't say). Needs the login.
+   */
+  orderInFocus(): Promise<OrderInFocus | null>;
   /** Allerhande's vegetarian main courses that match, most relevant first, without advertorials and baby food. */
   searchAllerhande(search: AllerhandeSearch): Promise<AllerhandeCandidate[]>;
   /** One Allerhande recipe by its number, in the shape `food recipe fetch` gives any recipe page. */
@@ -102,12 +112,29 @@ export function ahGateway(config: Config): AhGateway {
     },
     async placedOrder(weekStart) {
       if (!(await loggedIn())) throw new AhLoginError();
-      const friday = addDays(weekStart, 6);
-      const inWeek = (date: string | undefined): date is string => !!date && date >= weekStart && date <= friday;
       // Only a total of exactly 0 counts as empty: without a total, the order stays placed and nothing is written.
       const empty = (o: AhOrder) => o.totalPrice?.totalPrice?.amount === 0;
-      const order = (await client.openOrders()).find((o) => inWeek(o.delivery?.slot?.date) && !empty(o));
+      const order = (await client.openOrders()).find((o) => inWeek(weekStart, o.delivery?.slot?.date) && !empty(o));
       return order ? { id: order.orderId, status: order.delivery?.status ?? "OPEN", date: order.delivery!.slot!.date! } : null;
+    },
+    async orderInFocus() {
+      if (!(await loggedIn())) throw new AhLoginError();
+      const active = await client.activeOrder();
+      if (!active) return null;
+      const date = active.deliveryInformation?.deliveryDate;
+      if (!date) throw new AhError(`AH's order ${active.id}, open for changes, has no delivery date.`);
+      const closing = (await client.openOrders()).find((o) => o.orderId === active.id)?.closingDateTime;
+      return {
+        id: active.id,
+        date,
+        closes: closing ? new Date(closing) : null,
+        products: (active.orderedProducts ?? []).map(({ quantity, product }) => ({
+          id: product.webshopId,
+          title: product.title,
+          quantity,
+          price: product.currentPrice ?? product.priceBeforeBonus ?? null,
+        })),
+      };
     },
     async searchAllerhande({ text, season, cuisine, size = 20 }) {
       const filters = { ...VEGETARIAN_MAINS, ...(season ? { seizoen: [season] } : {}), ...(cuisine ? { keuken: [cuisine] } : {}) };

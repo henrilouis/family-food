@@ -94,8 +94,8 @@ Done when Products.md holds every confirmed new match and you have the `haveAtHo
 
 Write `{ "lines": [entries…], "haveAtHome": [ids…] }` to a temp JSON file. Tell the adult a browser window may open for the AH login, then run `food basket fill --week <week_start> <file>` with a long timeout (10 minutes): on an expired login the CLI opens the login itself, once. Run it once; a retry is the adult's call.
 
-- **Exit 0**: Mijn lijst is filled (or the placed order already has everything). Show the report as printed.
-- **Exit 2**: nothing was written to AH. Show the adult the whole output: it starts with the reason (order already placed, login failed, AH ordering down) and holds the add-multiple links, the shopping list, or what to change in Mijn bestellingen.
+- **Exit 0**: Mijn lijst is filled (or the placed order already has everything). When the week's order was open for changes in the AH app, the products went straight into that order and the notes into Mijn lijst; the report ends with when to submit it. Show the report as printed.
+- **Exit 2**: nothing was written to AH. Show the adult the whole output: it starts with the reason (order already placed, an order for another week open for changes in the AH app, login failed, AH ordering down) and holds the add-multiple links, the shopping list, or what to change in Mijn bestellingen. For an order of another week open for changes, the adult submits it or undoes its changes in the app; then run step 6 again.
 - **Exit 1** with "The matches don't fit the Week Menu": your list is off (a missing line, a line not on this week's Recipes, a product without pack fraction). Nothing was written; fix the entries and run it again.
 - **Exit 1** otherwise: pass the message on.
 

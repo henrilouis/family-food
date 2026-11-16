@@ -6,6 +6,7 @@ import {
   AhError,
   AhLoginError,
   AhUnavailableError,
+  type AhActiveOrder,
   type AhBasket,
   type AhClient,
   type AhOrder,
@@ -64,6 +65,7 @@ export function ahdumpClient(tokenFile: string): AhClient {
     basket: async (): Promise<AhBasket> => JSON.parse(await ahdump(["basket"])),
     addToBasket: async (additions): Promise<AhBasket> => JSON.parse(await ahdump(["basket-add"], JSON.stringify(additions))),
     openOrders: async (): Promise<AhOrder[]> => JSON.parse(await ahdump(["orders"])),
+    activeOrder: async (): Promise<AhActiveOrder | null> => JSON.parse(await ahdump(["active-order"])),
     searchRecipes: async ({ text, filters, size }): Promise<AhRecipeSummary[]> => {
       const filterArgs = Object.entries(filters).flatMap(([group, values]) => values.flatMap((value) => ["-filter", `${group}=${value}`]));
       return JSON.parse(await ahdump(["recipes", "-size", String(size), ...filterArgs, "--", ...(text ? [text] : [])]));

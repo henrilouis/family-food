@@ -34,10 +34,27 @@ export type AhOrder = {
   orderId: number;
   /** Made by the delivery subscription for its recurring slot; it stays empty until Mijn lijst is checked out into it. */
   isSubscriptionOrder?: boolean | null;
+  /** When changes close, as an ISO time ("2026-11-20T11:00:00Z"). */
+  closingDateTime?: string | null;
   /** What the order costs; 0 while it holds no products. */
   totalPrice?: { totalPrice?: { amount?: number | null } | null } | null;
   /** Delivery status, e.g. "SUBMITTED" or "REOPENED", and the slot's date ("2026-11-28"). */
   delivery?: { status?: string; slot?: { date?: string } | null } | null;
+};
+
+/**
+ * The order open for changes in the AH app (`/mobile-services/order/v1/summaries/active`): picked when ordering
+ * from Mijn lijst, or reopened. While there is one, products added go into it instead of Mijn lijst; notes don't.
+ * Only the fields the gateway reads.
+ */
+export type AhActiveOrder = {
+  id: number;
+  state?: string;
+  deliveryInformation?: { deliveryDate?: string | null } | null;
+  orderedProducts?: {
+    quantity: number;
+    product: { webshopId: number; title: string; priceBeforeBonus?: number | null; currentPrice?: number | null };
+  }[] | null;
 };
 
 /** An Allerhande recipe's rating; `average` is in stars out of 5. */
@@ -113,10 +130,12 @@ export interface AhClient {
   searchByPurchaseFrequency(query: string): Promise<AhProduct[]>;
   /** Mijn lijst, with the user token. */
   basket(): Promise<AhBasket>;
-  /** Adds products (GraphQL `basketItemsAdd`, which adds to the quantity already there) and free-text notes; returns Mijn lijst after. */
+  /** Adds products (GraphQL `basketItemsAdd`, which adds to the quantity already there) and free-text notes; returns Mijn lijst. */
   addToBasket(additions: AhBasketAdditions): Promise<AhBasket>;
   /** The open orders (GraphQL `orderFulfillments(status: OPEN)`), with the user token. */
   openOrders(): Promise<AhOrder[]>;
+  /** The order open for changes in the AH app, with the user token; null when none is. */
+  activeOrder(): Promise<AhActiveOrder | null>;
   /** Allerhande recipe search (GraphQL `recipeSearchV2`, most relevant first), with an anonymous token. */
   searchRecipes(query: AhRecipeQuery): Promise<AhRecipeSummary[]>;
   /** One Allerhande recipe (GraphQL `recipe(id)`), with an anonymous token; null when AH has none with that id. */

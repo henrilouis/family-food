@@ -1,5 +1,6 @@
+import { inWeek } from "../../bundle/dates.ts";
 import { AhError, AhLoginError, AhUnavailableError } from "../adapters/ah/client.ts";
-import type { AhGateway } from "../adapters/ah/gateway.ts";
+import type { AhGateway, OrderInFocus } from "../adapters/ah/gateway.ts";
 import { productTitle, type BasketPlan, type PlannedProduct } from "./quantities.ts";
 
 /**
@@ -31,12 +32,15 @@ export type FilledProduct = PlannedProduct & { title: string; added: number; bef
 /** What `food basket fill` did. */
 export type BasketOutcome =
   /**
-   * Mijn lijst is filled. `change` only holds removals still possible: what is still in Mijn lijst.
-   * `total` is Mijn lijst's estimated total after adding, from the prices AH gives.
+   * Mijn lijst is filled, or with `into` set, the order open for changes in the AH app: its products went there,
+   * its notes to Mijn lijst. `change` only holds removals still possible: what is still in Mijn lijst or that order.
+   * `total` is the estimated total of Mijn lijst's or that order's products after adding, from the prices AH gives.
    */
-  | { kind: "filled"; plan: BasketPlan; change: BasketChange; products: FilledProduct[]; total: number }
+  | { kind: "filled"; plan: BasketPlan; change: BasketChange; products: FilledProduct[]; total: number; into: OrderInFocus | null }
   /** An order delivering in the Week Menu's week is placed: nothing was written to AH. */
   | { kind: "order placed"; plan: BasketPlan; change: BasketChange; order: { id: number; status: string; date: string } }
+  /** An order for another week is open for changes in the AH app, so products would go into it: nothing was written to AH. */
+  | { kind: "other order in focus"; plan: BasketPlan; change: BasketChange; order: OrderInFocus }
   /** AH refused the login, also after logging in again: nothing was written to AH. */
   | { kind: "login failed"; plan: BasketPlan; change: BasketChange; error: string }
   /** AH didn't answer: nothing was written to AH, the shopping list goes in the `## Basket` section. */
@@ -45,7 +49,9 @@ export type BasketOutcome =
 /**
  * Adds to Mijn lijst what the plan needs beyond what an earlier run recorded: products merge into lines already
  * there, unmatched items go in as free-text notes. Never removes anything; what is no longer needed is only listed.
- * Writes nothing once an order delivering in the Week Menu's week is placed. When AH refuses the login, `log`s a prompt and runs
+ * While the week's empty order is open for changes in the AH app, the products go into it instead (AH does that).
+ * Writes nothing once an order delivering in the Week Menu's week is placed, nor while an order for another week is
+ * open for changes. When AH refuses the login, `log`s a prompt and runs
  * the browser login once; if AH still refuses, writes nothing. Writes nothing either when AH doesn't answer.
  */
 export async function fillBasket(plan: BasketPlan, gateway: AhGateway, log: (line: string) => void): Promise<BasketOutcome> {
@@ -82,17 +88,22 @@ async function fillOrRelogin(gateway: AhGateway, plan: BasketPlan, change: Baske
 async function fillWith(gateway: AhGateway, plan: BasketPlan, change: BasketChange): Promise<BasketOutcome> {
   const order = await gateway.placedOrder(plan.weekStart);
   if (order) return { kind: "order placed", plan, change, order };
+  const focus = await gateway.orderInFocus();
+  if (focus && !inWeek(plan.weekStart, focus.date)) return { kind: "other order in focus", plan, change, order: focus };
 
-  const before = await gateway.readBasket();
+  const list = await gateway.readBasket();
+  const before = focus ? { products: focus.products, notes: list.notes } : list;
   const additions = {
     products: change.add.map(({ id, quantity }) => ({ id, quantity })),
     notes: change.addNotes.map((description) => ({ description, quantity: 1 })),
   };
-  const after = additions.products.length || additions.notes.length ? await gateway.addToBasket(additions) : before;
+  const written = additions.products.length || additions.notes.length ? await gateway.addToBasket(additions) : list;
+  const after = focus ? { products: (await gateway.orderInFocus())?.products ?? [], notes: written.notes } : written;
   const inList = (id: number) => before.products.find((p) => p.id === id)?.quantity ?? 0;
   return {
     kind: "filled",
     plan,
+    into: focus,
     change: {
       ...change,
       remove: change.remove.map((p) => ({ ...p, quantity: Math.min(p.quantity, inList(p.id)) })).filter((p) => p.quantity > 0),

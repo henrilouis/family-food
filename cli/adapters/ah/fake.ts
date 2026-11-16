@@ -1,9 +1,11 @@
 import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { addDays } from "../../../bundle/dates.ts";
 import {
   AhError,
   AhLoginError,
   AhUnavailableError,
+  type AhActiveOrder,
   type AhBasket,
   type AhBasketAdditions,
   type AhClient,
@@ -36,6 +38,8 @@ type Mode =
  *   is checked out (`status` defaults to SUBMITTED; REOPENED means reopened for changes)
  *   `{ "mode": "subscription slot", "date": "2026-11-28" }`: the delivery subscription's empty order for `date`,
  *   which AH lists as an open order with a total of 0 until Mijn lijst is checked out into it (`status` as above)
+ *   Either order with `"status": "REOPENED"` is open for changes in the AH app: products added go into it
+ *   (`order.json`, `{ products: [{ id, quantity }] }`) instead of Mijn lijst, and its total follows them
  *   `{ "mode": "login expired" }`: AH refuses the user token; logging in again doesn't help, unless
  *   `"loginFixesIt": true`, when a login ends this mode
  *   `{ "mode": "AH down" }`: every request fails as when AH's ordering is down
@@ -73,16 +77,32 @@ export function fakeAhClient(folder: string, tokenFile: string): AhClient {
   const asUser = () => request(true);
 
   const readBasket = () => state<FakeBasket>("basket.json", { products: [], notes: [] });
+  const readOrder = () => state<Pick<FakeBasket, "products">>("order.json", { products: [] });
+
+  /** The order in `mode.json`, if any, and whether it is open for changes in the AH app. */
+  const fakeOrder = async () => {
+    const current = await mode();
+    if (current?.mode !== "order placed" && current?.mode !== "subscription slot") return null;
+    return { ...current, status: current.status ?? "SUBMITTED", inFocus: current.status === "REOPENED" };
+  };
+
+  const price = (product: AhProduct | undefined) => (product ? (product.currentPrice ?? product.priceBeforeBonus) : undefined);
+
+  const orderTotal = async () => {
+    const catalogue = await state<AhProduct[]>("products.json", []);
+    const lines = (await readOrder()).products;
+    return lines.reduce((sum, { id, quantity }) => sum + (price(catalogue.find((p) => p.webshopId === id)) ?? 0) * quantity, 0);
+  };
 
   const asAh = async (basket: FakeBasket): Promise<AhBasket> => {
     const catalogue = await state<AhProduct[]>("products.json", []);
     return {
       itemsInList: basket.products.map(({ id, quantity }) => {
         const product = catalogue.find((p) => p.webshopId === id);
-        const price = product ? (product.currentPrice ?? product.priceBeforeBonus) : undefined;
+        const now = price(product);
         return {
           quantity,
-          product: { id, title: product?.title ?? `Product ${id}`, priceV2: price === undefined ? null : { now: { amount: price } } },
+          product: { id, title: product?.title ?? `Product ${id}`, priceV2: now === undefined ? null : { now: { amount: now } } },
         };
       }),
       notes: basket.notes,
@@ -140,28 +160,51 @@ export function fakeAhClient(folder: string, tokenFile: string): AhClient {
       const requests = await state<unknown[]>("basket-requests.json", []);
       await writeFile(path.join(folder, "basket-requests.json"), JSON.stringify([...requests, { add: additions }], null, 2));
       const basket = await readBasket();
+      const inFocus = (await fakeOrder())?.inFocus;
+      const order = await readOrder();
+      const products = inFocus ? order.products : basket.products;
       for (const { id, quantity } of additions.products) {
-        const line = basket.products.find((p) => p.id === id);
+        const line = products.find((p) => p.id === id);
         if (line) line.quantity += quantity;
-        else basket.products.push({ id, quantity });
+        else products.push({ id, quantity });
       }
       basket.notes.push(...additions.notes);
       await writeFile(path.join(folder, "basket.json"), JSON.stringify(basket, null, 2));
+      if (inFocus) await writeFile(path.join(folder, "order.json"), JSON.stringify(order, null, 2));
       return asAh(basket);
     },
     async openOrders(): Promise<AhOrder[]> {
       await asUser();
-      const current = await mode();
-      if (current?.mode !== "order placed" && current?.mode !== "subscription slot") return [];
-      const empty = current.mode === "subscription slot";
+      const order = await fakeOrder();
+      if (!order) return [];
+      const empty = order.mode === "subscription slot";
       return [
         {
           orderId: 1,
           isSubscriptionOrder: empty,
-          totalPrice: { totalPrice: { amount: empty ? 0 : 42.5 } },
-          delivery: { status: current.status ?? "SUBMITTED", slot: { date: current.date } },
+          closingDateTime: `${addDays(order.date, -1)}T11:00:00Z`,
+          totalPrice: { totalPrice: { amount: (empty ? 0 : 42.5) + (await orderTotal()) } },
+          delivery: { status: order.status, slot: { date: order.date } },
         },
       ];
+    },
+    async activeOrder(): Promise<AhActiveOrder | null> {
+      await asUser();
+      const order = await fakeOrder();
+      if (!order?.inFocus) return null;
+      const catalogue = await state<AhProduct[]>("products.json", []);
+      return {
+        id: 1,
+        state: order.status,
+        deliveryInformation: { deliveryDate: order.date },
+        orderedProducts: (await readOrder()).products.map(({ id, quantity }) => {
+          const product = catalogue.find((p) => p.webshopId === id);
+          return {
+            quantity,
+            product: { webshopId: id, title: product?.title ?? `Product ${id}`, priceBeforeBonus: product?.priceBeforeBonus, currentPrice: product?.currentPrice },
+          };
+        }),
+      };
     },
     async searchRecipes({ text, filters, size }) {
       await request(false);

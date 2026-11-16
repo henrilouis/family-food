@@ -1,4 +1,4 @@
-import { dayLabel } from "../../bundle/dates.ts";
+import { dayLabel, timeLabel } from "../../bundle/dates.ts";
 import { filledBefore, unchanged, type BasketChange, type BasketOutcome } from "./fill.ts";
 import { productTitle, type BasketPlan, type PlannedProduct, type ShoppingGroup } from "./quantities.ts";
 
@@ -37,10 +37,23 @@ export function formatReport(outcome: BasketOutcome): string {
         formatLinks(outcome.change),
         formatShoppingList(outcome.plan, outcome.change, "Shopping list"),
       ].join("");
+    case "other order in focus": {
+      const order = orderLabel(outcome.order.date);
+      return [
+        `The ${order} is open for changes in the AH app, so nothing was added: AH would put the products into that order.\n`,
+        "Submit that order or undo its changes in the app, then fill the Basket again.\n",
+      ].join("");
+    }
   }
 }
 
-function formatFilled({ plan, change, products, total }: Extract<BasketOutcome, { kind: "filled" }>): string {
+/** "order for Saturday 28 Nov". */
+function orderLabel(date: string): string {
+  return `order for ${dayLabel(date, { long: true })}`;
+}
+
+function formatFilled({ plan, change, products, total, into }: Extract<BasketOutcome, { kind: "filled" }>): string {
+  const where = into ? `the ${orderLabel(into.date)}` : "Mijn lijst";
   const added = products.filter((p) => p.added > 0 && p.before === 0);
   const alreadyThere = products.filter((p) => p.added > 0 && p.before > 0);
   const unchanged = [
@@ -48,18 +61,21 @@ function formatFilled({ plan, change, products, total }: Extract<BasketOutcome, 
     ...plan.notes.filter((note) => !change.addNotes.includes(note)).map((note) => `Note: ${note}`),
   ];
   return [
-    group("Added to Mijn lijst", added.map((p) => `${p.added} × ${p.title}${p.price === null ? "" : ` (${euro(p.price)} each)`}`)),
-    group("Already in Mijn lijst, added on top", alreadyThere.map((p) => `${p.title}: ${p.before} + ${p.added} = ${p.before + p.added}`)),
+    group(`Added to ${where}`, added.map((p) => `${p.added} × ${p.title}${p.price === null ? "" : ` (${euro(p.price)} each)`}`)),
+    group(`Already in ${where}, added on top`, alreadyThere.map((p) => `${p.title}: ${p.before} + ${p.added} = ${p.before + p.added}`)),
     unchanged.length ? group("Added on an earlier run, unchanged", unchanged) : "",
-    group("No longer needed, remove these from Mijn lijst by hand", [
+    group(`No longer needed, remove these from ${where} by hand`, [
       ...change.remove.map((p) => `${p.quantity} × ${p.title}`),
       ...change.removeNotes.map((note) => `Note: ${note}`),
     ]),
-    group("Unmatched, added as notes", change.addNotes),
+    group(into ? "Unmatched, added as notes to Mijn lijst" : "Unmatched, added as notes", change.addNotes),
     group("Optional, not added", plan.optional),
     `Have at home: ${plan.haveAtHome.join(", ") || "none"}\n`,
     `Estimated total: ${euro(total)}\n`,
-    "\nCheck out into the Saturday slot before Friday 12:00.\n",
+    into
+      ? `\nThe ${orderLabel(into.date)} was open for changes in the AH app, so the products went straight into it.\n` +
+        `Check it and submit it before ${into.closes ? timeLabel(into.closes) : "it closes"}.\n`
+      : "\nCheck out into the Saturday slot before Friday 12:00.\n",
   ].join("");
 }
 

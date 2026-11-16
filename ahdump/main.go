@@ -1,6 +1,6 @@
 // ahdump is the family-food CLI's way into Albert Heijn's unofficial app API,
 // through appie-go. The `food` CLI runs it; each command prints JSON on stdout.
-// It only adds to Mijn lijst, and never removes or checks out anything.
+// It only adds (to Mijn lijst, or to the order open for changes in the AH app), and never removes or checks out anything.
 //
 //	ahdump -auth <token file> login
 //	ahdump -auth <token file> refresh
@@ -8,6 +8,7 @@
 //	ahdump -auth <token file> basket
 //	ahdump -auth <token file> basket-add < {"products": [{"id", "quantity"}], "notes": [{"description", "quantity"}]}
 //	ahdump -auth <token file> orders
+//	ahdump -auth <token file> active-order
 //	ahdump -auth <token file> recipes [-size n] [-filter group=value]... [--] [search text]
 //	ahdump -auth <token file> recipe <id>
 //	ahdump -auth <token file> recipe-suggestions <id>
@@ -40,8 +41,11 @@ commands:
   basket                  print Mijn lijst as JSON
   basket-add              add the products and free-text notes given as JSON on stdin to Mijn lijst
                           ({"products": [{"id", "quantity"}], "notes": [{"description", "quantity"}]}),
-                          then print Mijn lijst; quantities add to what is there, nothing is removed
-  orders                  print the open orders (checked out or reopened) with their delivery slot as JSON
+                          then print Mijn lijst; quantities add to what is there, nothing is removed.
+                          While an order is open for changes, the products go into that order instead
+  orders                  print the open orders (checked out, reopened, or the delivery subscription's
+                          empty orders) with their delivery slot and total as JSON
+  active-order            print the order open for changes in the AH app as JSON (null when none is)
   recipes [-size n] [-filter group=value]... [--] [search text]
                           print Allerhande recipe search results as JSON (anonymous token);
                           -filter e.g. speciale-wensen=vegetarisch, menugang=hoofdgerecht, seizoen=winter
@@ -100,6 +104,11 @@ func main() {
 		var orders []byte
 		if orders, err = ah.openOrders(ctx); err == nil {
 			err = printJSON(json.RawMessage(orders))
+		}
+	case "active-order":
+		var order []byte
+		if order, err = ah.activeOrder(ctx); err == nil {
+			err = printJSON(json.RawMessage(order))
 		}
 	case "recipes":
 		err = searchRecipes(ctx, ah, args)

@@ -59,6 +59,8 @@ async function basketBox(catalogue: AhProduct[]) {
   const seedBasket = (basket: Partial<FakeBasket>) =>
     writeFile(path.join(ah, "basket.json"), JSON.stringify({ products: [], notes: [], ...basket }));
   const basket = async (): Promise<FakeBasket> => JSON.parse(await readFile(path.join(ah, "basket.json"), "utf8"));
+  /** The products in the fake AH's order that is open for changes. */
+  const order = async (): Promise<FakeBasket> => JSON.parse(await readFile(path.join(ah, "order.json"), "utf8"));
 
   /** Every write the fake AH received, in order; [] when none. */
   const requests = async (): Promise<{ add: FakeBasket }[]> =>
@@ -87,7 +89,7 @@ async function basketBox(catalogue: AhProduct[]) {
     await writeFile(weekMenuFile(), `${await readFile(weekMenuFile(), "utf8")}\n${section}`);
   };
 
-  return { ...box, ah, recipe, weekMenu, changeMenu, weekMenuFile, staples, seedBasket, basket, requests, mode, fill, basketSection };
+  return { ...box, ah, recipe, weekMenu, changeMenu, weekMenuFile, staples, seedBasket, basket, order, requests, mode, fill, basketSection };
 }
 
 const quantities = (basket: FakeBasket) => Object.fromEntries(basket.products.map((p) => [p.id, p.quantity]));
@@ -726,7 +728,7 @@ describe("food basket fill once the order is placed", () => {
     const box = await basketBox([{ webshopId: 1, title: "AH Spaghetti 500 g", priceBeforeBonus: 1.29 }]);
     await box.recipe("Pasta", ["*500g* spaghetti"]);
     await box.weekMenu([["Pasta", "", ""]]);
-    await box.mode({ mode: "subscription slot", date: WEEK, status: "REOPENED" });
+    await box.mode({ mode: "subscription slot", date: WEEK });
 
     const result = await box.fill([{ recipe: "Pasta", line: "500g spaghetti", product: 1, packFraction: 1, kind: "Cupboard Ingredient" }]);
 
@@ -745,6 +747,96 @@ describe("food basket fill once the order is placed", () => {
 
     expect(result.code).toBe(0);
     expect(quantities(await box.basket())).toEqual({ 1: 1 });
+  });
+});
+
+describe("food basket fill while an order is open for changes in the AH app", () => {
+  const catalogue = [
+    { webshopId: 1, title: "AH Spaghetti 500 g", priceBeforeBonus: 1.29 },
+    { webshopId: 2, title: "AH Passata 500 g", priceBeforeBonus: 0.99 },
+  ];
+  const pasta: Match[] = [
+    { recipe: "Pasta", line: "500g spaghetti", product: 1, packFraction: 1, kind: "Cupboard Ingredient" },
+    { recipe: "Pasta", line: "500g passata", product: 2, packFraction: 1, kind: "Cupboard Ingredient" },
+    { recipe: "Pasta", line: "10 basil leaves", product: null },
+  ];
+  async function pastaWeek() {
+    const box = await basketBox(catalogue);
+    await box.recipe("Pasta", ["*500g* spaghetti", "*500g* passata", "*10* basil leaves"]);
+    await box.weekMenu([["Pasta", "", ""]]);
+    return box;
+  }
+
+  test("puts the products into the week's empty order and the notes in Mijn lijst, and says to submit it", async () => {
+    const box = await pastaWeek();
+    await box.mode({ mode: "subscription slot", date: WEEK, status: "REOPENED" });
+
+    const result = await box.fill(pasta);
+
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(0);
+    expect(quantities(await box.order())).toEqual({ 1: 1, 2: 1 });
+    expect(await box.basket()).toEqual({ products: [], notes: [{ description: "basil leaves (10)", quantity: 1 }] });
+    expect(result.stdout).toBe(
+      [
+        "Added to the order for Saturday 28 Nov:",
+        "- 1 × AH Spaghetti 500 g (€1.29 each)",
+        "- 1 × AH Passata 500 g (€0.99 each)",
+        "Already in the order for Saturday 28 Nov, added on top: none",
+        "No longer needed, remove these from the order for Saturday 28 Nov by hand: none",
+        "Unmatched, added as notes to Mijn lijst:",
+        "- basil leaves (10)",
+        "Optional, not added: none",
+        "Have at home: none",
+        "Estimated total: €2.28",
+        "",
+        "The order for Saturday 28 Nov was open for changes in the AH app, so the products went straight into it.",
+        "Check it and submit it before Fri 27 Nov 12:00.",
+        "",
+      ].join("\n"),
+    );
+    expect(await box.basketSection()).toBe(
+      [
+        "## Basket",
+        "- AH Spaghetti 500 g (id 1) ×1: spaghetti",
+        "- AH Passata 500 g (id 2) ×1: passata",
+        "- Note: basil leaves (10)",
+        "Have at home: none",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  test("run again, sees the order as filled and changes nothing", async () => {
+    const box = await pastaWeek();
+    await box.mode({ mode: "subscription slot", date: WEEK, status: "REOPENED" });
+    await box.fill(pasta);
+
+    const result = await box.fill(pasta);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toBe("The order for Saturday 28 Nov is already placed and has what the Week Menu needs: nothing to change.\n");
+    expect(await box.requests()).toHaveLength(1);
+  });
+
+  test("writes nothing while an order for another week is open for changes, as AH would put the products into it", async () => {
+    const box = await pastaWeek();
+    await box.mode({ mode: "subscription slot", date: "2026-12-05", status: "REOPENED" });
+    const noteBefore = await readFile(box.weekMenuFile(), "utf8");
+
+    const result = await box.fill(pasta);
+
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(2);
+    expect(await box.requests()).toEqual([]);
+    expect(result.stdout).toBe(
+      [
+        "The order for Saturday 5 Dec is open for changes in the AH app, so nothing was added: AH would put the products into that order.",
+        "Submit that order or undo its changes in the app, then fill the Basket again.",
+        "",
+      ].join("\n"),
+    );
+    expect(await readFile(box.weekMenuFile(), "utf8")).toBe(noteBefore);
   });
 });
 

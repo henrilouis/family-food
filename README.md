@@ -44,9 +44,10 @@ Say "fill the Basket" to the agent (the Planning Session does it after "lock it"
 
 `food basket lines` gives each line its ready `match` for `food basket fill` when it has a Pinned Product, with the share of a pack worked out from the Pack column where the amounts compare (g, ml, spoons, tins, pieces with "1 kg ≈ 8 onions").
 
-`food basket fill` is what the fill-basket skill runs once the Matches are confirmed. It reads the Week Menu, `Staples.md` and the Recipes, adds to Mijn lijst (never removes; an ingredient or chosen Staple without an AH product goes in as a free-text note), writes the Week Menu's `## Basket` section and prints a report. Run again after a menu change, it adds only the difference with `## Basket` and lists what is no longer needed. It exits 2 when it wrote nothing to AH and someone has to act on its output:
+`food basket fill` is what the fill-basket skill runs once the Matches are confirmed. It reads the Week Menu, `Staples.md` and the Recipes, adds to Mijn lijst (never removes; an ingredient or chosen Staple without an AH product goes in as a free-text note), writes the Week Menu's `## Basket` section and prints a report. When the week's empty order is open for changes in the AH app (picked when ordering from Mijn lijst), AH puts the products straight into that order and the notes in Mijn lijst; the report says so and to submit the order before it closes. The delivery subscription's empty orders don't count as placed. Run again after a menu change, it adds only the difference with `## Basket` and lists what is no longer needed. It exits 2 when it wrote nothing to AH and someone has to act on its output:
 
 - an order delivering in the Week Menu's week (the Saturday slot, or another slot on the Late path) is already placed: add-multiple links (25 products each) and a grouped shopping list, or, when the Basket was filled before checkout and the menu changed since, an add-and-remove list for Mijn bestellingen;
+- an order for another week is open for changes in the AH app, so AH would put the products into it: submit it or undo its changes, then fill again;
 - the AH login failed, also after logging in again once in the browser: add-multiple links and the shopping list;
 - AH doesn't answer (ordering down): the shopping list without ids, also written into `## Basket`.
 
