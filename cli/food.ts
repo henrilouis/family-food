@@ -3,6 +3,8 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { buildBundle } from "./build-bundle.ts";
 import { readConfig, writeConfig } from "./config.ts";
+import { DisplayTargetError } from "./adapters/display-target.ts";
+import { deploy, DeployRefused } from "./deploy.ts";
 import { preview } from "./preview.ts";
 import { VaultError } from "./vault.ts";
 
@@ -15,6 +17,8 @@ Commands:
   preview [--port <n>] [--lan]
                         Serve the Kitchen Display page and a fresh bundle on this Mac
                         (port 8787 by default; --lan to open it on other devices too)
+  deploy                Set up, update or repair the Kitchen Display Pi (ssh host \`kitchen\`)
+                        from a clean main that matches origin
 `;
 
 class UsageError extends Error {}
@@ -55,13 +59,16 @@ async function main(args: string[]): Promise<void> {
       preview({ vault: await vaultPath(), port, lan: values.lan, now });
       return;
     }
+    case "deploy":
+      await deploy((line) => line && process.stdout.write(line + "\n"));
+      return;
     default:
       throw new UsageError(usage);
   }
 }
 
 main(process.argv.slice(2)).catch((error) => {
-  const expected = error instanceof UsageError || error instanceof VaultError;
+  const expected = [UsageError, VaultError, DeployRefused, DisplayTargetError].some((type) => error instanceof type);
   process.stderr.write(expected ? error.message.trimEnd() + "\n" : `${error.stack ?? error}\n`);
   process.exitCode = 1;
 });
