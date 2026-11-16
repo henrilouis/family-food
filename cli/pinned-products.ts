@@ -4,9 +4,9 @@ import type { Amount, Ingredient } from "../bundle/bundle.ts";
 import { measureOf, parseMeasure } from "./amount.ts";
 import type { Match } from "./basket/quantities.ts";
 import { ingredientName, KINDS, sameIngredient, type Kind } from "./ingredient.ts";
-import { weekLines } from "./week-lines.ts";
-import { NoteError, readNote, tableRows, type Note } from "./vault.ts";
 import { UserError } from "./user-error.ts";
+import { NoteError, readNote, tableRows, type Note } from "./vault.ts";
+import { weekLines } from "./week-lines.ts";
 
 const PRODUCTS_NOTE = "Products.md";
 
