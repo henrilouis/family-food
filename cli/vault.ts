@@ -11,10 +11,21 @@ const WEEK_MENUS = "Week menus";
 /** A problem with the Recipe Vault's contents, reported to the user without a stack trace. */
 export class VaultError extends Error {}
 
-/** A Recipe Vault note: its file name, properties and markdown body. */
-type Note = { file: string; properties: Record<string, unknown>; body: string };
+/** A problem in one note, which `food vault check` can report next to the others. */
+export class NoteError extends VaultError {
+  readonly file: string;
+  readonly problem: string;
+  constructor(file: string, problem: string) {
+    super(`${file}: ${problem}`);
+    this.file = file;
+    this.problem = problem;
+  }
+}
 
-async function readNote(file: string): Promise<Note> {
+/** A Recipe Vault note: its file name, properties and markdown body. */
+export type Note = { file: string; properties: Record<string, unknown>; body: string };
+
+export async function readNote(file: string): Promise<Note> {
   const text = (await readFile(file, "utf8")).replace(/\r\n/g, "\n");
   const match = text.match(/^---\n([\s\S]*?)\n---\n?/);
   if (!match) return { file, properties: {}, body: text };
@@ -23,18 +34,35 @@ async function readNote(file: string): Promise<Note> {
 
 /** Every Week Menu note in the vault that has a `week_start`, oldest first. */
 export async function readWeekMenus(vault: string): Promise<WeekMenu[]> {
-  const dir = path.join(vault, WEEK_MENUS);
-  const files = (await readdir(dir)).filter((f) => f.endsWith(".md"));
-  const notes = await Promise.all(files.map((f) => readNote(path.join(dir, f))));
-  return notes
-    .filter((note) => note.properties.week_start)
-    .map(parseWeekMenu)
-    .sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+  return (await readWeekMenuNotes(vault)).map(parseWeekMenu).sort((a, b) => a.weekStart.localeCompare(b.weekStart));
 }
 
-function parseWeekMenu(note: Note): WeekMenu {
+/** Every Week Menu note in the vault that has a `week_start`, unparsed. */
+export async function readWeekMenuNotes(vault: string): Promise<Note[]> {
+  const notes = await readNotes(path.join(vault, WEEK_MENUS));
+  return notes.filter((note) => note.properties.week_start);
+}
+
+/** A Week Menu note's `week_start` as YYYY-MM-DD. */
+export function weekStartOf(note: Note): string {
   const start = note.properties.week_start;
-  const weekStart = start instanceof Date ? start.toISOString().slice(0, 10) : String(start);
+  return start instanceof Date ? start.toISOString().slice(0, 10) : String(start);
+}
+
+/** Every note in a vault folder (not its subfolders); none if the folder doesn't exist. */
+export async function readNotes(dir: string): Promise<Note[]> {
+  let files: string[];
+  try {
+    files = (await readdir(dir)).filter((f) => f.endsWith(".md")).sort();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
+  return Promise.all(files.map((f) => readNote(path.join(dir, f))));
+}
+
+export function parseWeekMenu(note: Note): WeekMenu {
+  const weekStart = weekStartOf(note);
   const days = dayTable(note).map((row): MenuDay => {
     const dinner = /^free day$/i.test(row.dinner ?? "") ? null : linkTarget(row.dinner ?? "");
     const noteCell = row.note ?? "";
@@ -54,7 +82,7 @@ const WEEK_DAYS = ["sat", "sun", "mon", "tue", "wed", "thu", "fri"];
 /** Days from the Week Menu's Saturday to the weekday a Day cell starts with: "Mon 23 Nov" → 2. */
 function weekdayOffset(file: string, day: string): number {
   const weekday = day.trim().toLowerCase().match(/^(sat|sun|mon|tue|wed|thu|fri)[a-z]*\b/);
-  if (!weekday) throw new VaultError(`${file}: can't tell which weekday the Day "${day}" is`);
+  if (!weekday) throw new NoteError(file, `can't tell which weekday the Day "${day}" is`);
   return WEEK_DAYS.indexOf(weekday[1]);
 }
 
@@ -63,7 +91,7 @@ function dayTable(note: Note): Record<string, string>[] {
   const lines = note.body.split("\n").map((l) => l.trim());
   const cells = (line: string) => line.replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
   const headerAt = lines.findIndex((l) => l.startsWith("|") && /\bdinner\b/i.test(l));
-  if (headerAt < 0) throw new VaultError(`${note.file}: no day table with a Dinner column`);
+  if (headerAt < 0) throw new NoteError(note.file, "no day table with a Dinner column");
   const header = cells(lines[headerAt]).map((c) => c.toLowerCase());
   const rows: Record<string, string>[] = [];
   for (const line of lines.slice(headerAt + 1)) {
@@ -81,22 +109,29 @@ function linkTarget(cell: string): string | null {
   return link ? path.basename(link[1].trim()) : null;
 }
 
-const RECIPE_FOLDERS = ["Meals", "Sides"];
+/** The folders a Week Menu's dinners and sides link into, in lookup order. */
+export const RECIPE_FOLDERS = ["Meals", "Sides"];
 
 /** The Recipe or Side a Week Menu links to by `name`. */
 export async function readRecipe(vault: string, name: string): Promise<Recipe> {
+  const note = await findRecipeNote(vault, name);
+  if (!note) throw new VaultError(`No Recipe "${name}" in ${RECIPE_FOLDERS.join(" or ")}`);
+  return parseRecipe(name, note);
+}
+
+/** The note of the Recipe or Side a Week Menu links to by `name`; null if there is none. */
+export async function findRecipeNote(vault: string, name: string): Promise<Note | null> {
   for (const folder of RECIPE_FOLDERS) {
-    const file = path.join(vault, folder, `${name}.md`);
     try {
-      return parseRecipe(name, await readNote(file));
+      return await readNote(path.join(vault, folder, `${name}.md`));
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     }
   }
-  throw new VaultError(`No Recipe "${name}" in ${RECIPE_FOLDERS.join(" or ")}`);
+  return null;
 }
 
-function parseRecipe(name: string, note: Note): Recipe {
+export function parseRecipe(name: string, note: Note): Recipe {
   const source = typeof note.properties.source === "string" && note.properties.source.trim() ? note.properties.source.trim() : null;
   const recipe: Recipe = { title: name, ingredients: [], method: [], notes: [], source };
   const steps: string[] = [];
@@ -138,7 +173,7 @@ function parseRecipe(name: string, note: Note): Recipe {
   recipe.method = steps.map((step) =>
     markStep(plainText(step), vocabulary, (amount) => {
       const parsed = parseAmount(amount);
-      if (!parsed) throw new VaultError(`${note.file}: the amount "${amount}" in the Method step "${step}" doesn't start with a number`);
+      if (!parsed) throw new NoteError(note.file, `the amount "${amount}" in the Method step "${step}" doesn't start with a number`);
       return parsed;
     }),
   );
@@ -150,7 +185,7 @@ function parseIngredient(file: string, line: string): Ingredient {
   const italic = line.match(/^\*([^*]+)\*\s*(.*)$/);
   if (!italic) return { amount: null, text: plainText(line) };
   const amount = parseAmount(italic[1]);
-  if (!amount) throw new VaultError(`${file}: the amount "${italic[1]}" in "${line}" doesn't start with a number`);
+  if (!amount) throw new NoteError(file, `the amount "${italic[1]}" in "${line}" doesn't start with a number`);
   return { amount, text: plainText(italic[2]) };
 }
 

@@ -11,6 +11,7 @@
   },
   "scripts": {
     "test": "vitest run",
+    "build:ahdump": "go build -C ahdump -o ahdump .",
     "typecheck": "tsc"
   },
   "dependencies": {
