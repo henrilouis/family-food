@@ -398,7 +398,18 @@ async function replaceSection(file: string, lines: string[]): Promise<void> {
 
 /** The exit code for `food basket fill`: 2 when nothing was written to AH and a human must act on the output. */
 export function exitCode(outcome: BasketOutcome): number {
-  return outcome.kind === "filled" ? 0 : 2;
+  if (outcome.kind === "filled") return 0;
+  if (outcome.kind === "order placed" && filledBefore(outcome.plan) && unchanged(outcome.change)) return 0;
+  return 2;
+}
+
+/** An earlier run filled Mijn lijst for the week (its `## Basket` section has products or notes). */
+function filledBefore(plan: BasketPlan): boolean {
+  return plan.recorded.products.length > 0 || plan.recorded.notes.length > 0;
+}
+
+function unchanged(change: BasketChange): boolean {
+  return !change.add.length && !change.addNotes.length && !change.remove.length && !change.removeNotes.length;
 }
 
 /** What to tell the person filling the Basket. */
@@ -406,12 +417,22 @@ export function formatReport(outcome: BasketOutcome): string {
   switch (outcome.kind) {
     case "filled":
       return formatFilled(outcome);
-    case "order placed":
+    case "order placed": {
+      const { plan, change } = outcome;
+      const placed = `The order for ${saturday(plan.weekStart)} is already placed`;
+      if (!filledBefore(plan)) {
+        return [`${placed}, so nothing was added to Mijn lijst.\n`, formatLinks(change), formatShoppingList(plan, change)].join("");
+      }
+      if (unchanged(change)) return `${placed} and has what the Week Menu needs: nothing to change.\n`;
       return [
-        `The order for ${saturday(outcome.plan.weekStart)} is already placed, so nothing was added to Mijn lijst.\n`,
-        formatLinks(outcome.change),
-        formatShoppingList(outcome.plan, outcome.change),
+        `${placed}, so nothing was changed in AH.\n`,
+        "The Week Menu changed since the Basket was filled. Change the order in Mijn bestellingen:\n",
+        group("Add to the order", change.add.map((p) => `${p.quantity} × ${titleOf(plan, p)}: ${p.covers.join(", ")}`)),
+        group("Remove from the order", change.remove.map((p) => `${p.quantity} × ${p.title}`)),
+        change.addNotes.length ? group("Unmatched, buy these yourself", change.addNotes) : "",
+        change.removeNotes.length ? group("Unmatched, no longer needed", change.removeNotes) : "",
       ].join("");
+    }
   }
 }
 

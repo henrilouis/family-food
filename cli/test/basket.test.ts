@@ -583,6 +583,69 @@ describe("food basket fill once the order is placed", () => {
     expect(await readFile(box.weekMenuFile(), "utf8")).not.toContain("## Basket");
   });
 
+  test("after the menu changed post-checkout, gives an add-and-remove list for Mijn bestellingen instead", async () => {
+    const box = await basketBox([
+      { webshopId: 1, title: "AH Spaghetti 500 g", priceBeforeBonus: 1.29 },
+      { webshopId: 2, title: "AH Passata 500 g", priceBeforeBonus: 0.99 },
+      { webshopId: 3, title: "AH Risottorijst 500 g", priceBeforeBonus: 2.49 },
+    ]);
+    await box.recipe("Pasta", ["*500g* spaghetti", "*500g* passata", "*5* basil leaves"]);
+    await box.recipe("Risotto", ["*300g* risotto rice", "*10* sage leaves"]);
+    await box.weekMenu([["Pasta", "", ""], ["Risotto", "", ""]]);
+    const pasta: Match[] = [
+      { recipe: "Pasta", line: "500g spaghetti", product: 1, packFraction: 1, kind: "Cupboard Ingredient" },
+      { recipe: "Pasta", line: "500g passata", product: 2, packFraction: 1, kind: "Cupboard Ingredient" },
+      { recipe: "Pasta", line: "5 basil leaves", product: null },
+    ];
+    await box.fill([
+      ...pasta,
+      { recipe: "Risotto", line: "300g risotto rice", product: 3, packFraction: 0.6, kind: "Cupboard Ingredient" },
+      { recipe: "Risotto", line: "10 sage leaves", product: null },
+    ]);
+    await box.mode({ mode: "order placed", date: WEEK });
+    await box.changeMenu([["Pasta", "", ""], ["Pasta", "", ""]]);
+    const noteBefore = await readFile(box.weekMenuFile(), "utf8");
+
+    const result = await box.fill(pasta);
+
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(2);
+    expect(await box.requests()).toHaveLength(1);
+    expect(result.stdout).toBe(
+      [
+        "The order for Saturday 28 Nov is already placed, so nothing was changed in AH.",
+        "The Week Menu changed since the Basket was filled. Change the order in Mijn bestellingen:",
+        "Add to the order:",
+        "- 1 × AH Spaghetti 500 g: spaghetti",
+        "- 1 × AH Passata 500 g: passata",
+        "Remove from the order:",
+        "- 1 × AH Risottorijst 500 g",
+        "Unmatched, buy these yourself:",
+        "- basil leaves (10)",
+        "Unmatched, no longer needed:",
+        "- basil leaves (5)",
+        "- sage leaves (10)",
+        "",
+      ].join("\n"),
+    );
+    expect(await readFile(box.weekMenuFile(), "utf8")).toBe(noteBefore);
+  });
+
+  test("says there is nothing to change when the placed order already matches the Week Menu", async () => {
+    const box = await basketBox([{ webshopId: 1, title: "AH Spaghetti 500 g", priceBeforeBonus: 1.29 }]);
+    await box.recipe("Pasta", ["*500g* spaghetti"]);
+    await box.weekMenu([["Pasta", "", ""]]);
+    const pasta: Match[] = [{ recipe: "Pasta", line: "500g spaghetti", product: 1, packFraction: 1, kind: "Cupboard Ingredient" }];
+    await box.fill(pasta);
+    await box.mode({ mode: "order placed", date: WEEK, status: "REOPENED" });
+
+    const result = await box.fill(pasta);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toBe("The order for Saturday 28 Nov is already placed and has what the Week Menu needs: nothing to change.\n");
+    expect(await box.requests()).toHaveLength(1);
+  });
+
   test("fills Mijn lijst as usual when the placed order is for another Saturday", async () => {
     const box = await basketBox([{ webshopId: 1, title: "AH Spaghetti 500 g", priceBeforeBonus: 1.29 }]);
     await box.recipe("Pasta", ["*500g* spaghetti"]);
