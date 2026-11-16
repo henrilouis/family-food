@@ -1,6 +1,7 @@
 // The Kitchen Display's view logic: from a display bundle and the time, the deck of screens to show.
 import type { Amount, DisplayBundle, IngredientGroup, MenuDay, Recipe, Step, WeekMenu } from "../../bundle/bundle.ts";
-import { addDays, kitchenDate } from "../../bundle/kitchen-day.ts";
+import { addDays, dayLabel, timeLabel, weekdayName } from "../../bundle/dates.ts";
+import { kitchenDate } from "../../bundle/kitchen-day.ts";
 
 export type IngredientList = {
   heading: string | null;
@@ -115,17 +116,6 @@ export type Deck = {
   current: number;
 };
 
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-const weekdayName = (date: string): string => WEEKDAY_NAMES[new Date(`${date}T00:00:00Z`).getUTCDay()];
-
-function dayLabel(date: string): string {
-  const d = new Date(`${date}T00:00:00Z`);
-  return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
-}
-
 const FRACTIONS: [string, number][] = [["½", 1 / 2], ["¼", 1 / 4], ["¾", 3 / 4], ["⅓", 1 / 3], ["⅔", 2 / 3], ["⅛", 1 / 8]];
 
 /** A quantity as a cook writes it: "3", "1½", "⅔", "0.6". */
@@ -196,9 +186,7 @@ function leftoversScreen(bundle: DisplayBundle, day: MenuDay, dinner: string): L
 }
 
 function weekScreen(bundle: DisplayBundle, week: WeekMenu, today: string): WeekScreen {
-  const published = new Date(bundle.publishedAt);
-  const time = [published.getHours(), published.getMinutes()].map((n) => String(n).padStart(2, "0")).join(":");
-  return { kind: "week", days: week.days.map((d) => weekRow(bundle, d, today)), published: `${dayLabel(localDate(published))} ${time}` };
+  return { kind: "week", days: week.days.map((d) => weekRow(bundle, d, today)), published: timeLabel(new Date(bundle.publishedAt)) };
 }
 
 function weekRow(bundle: DisplayBundle, day: MenuDay, today: string): WeekRow {
@@ -211,8 +199,6 @@ function weekRow(bundle: DisplayBundle, day: MenuDay, today: string): WeekRow {
     tags: [...(day.novel ? ["New"] : []), ...(day.double === "cook" ? ["×2"] : [])],
   };
 }
-
-const localDate = (d: Date): string => [d.getFullYear(), d.getMonth() + 1, d.getDate()].map((n) => String(n).padStart(2, "0")).join("-");
 
 /** How many times the written amounts to cook: twice on a Double cook day, for tonight and tomorrow. */
 const timesFor = (day: MenuDay): number => (day.double === "cook" ? 2 : 1);

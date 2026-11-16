@@ -2,11 +2,12 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { Ingredient, IngredientGroup, MenuDay, Recipe, WeekMenu } from "../bundle/bundle.ts";
-import { addDays } from "../bundle/kitchen-day.ts";
+import { addDays } from "../bundle/dates.ts";
 import { parseAmount } from "./amount.ts";
 import { ingredientWords, markStep } from "./step.ts";
 
-const WEEK_MENUS = "Week menus";
+/** The vault folder of the Week Menu notes. */
+export const WEEK_MENUS = "Week menus";
 
 /** A problem with the Recipe Vault's contents, reported to the user without a stack trace. */
 export class VaultError extends Error {}

@@ -64,6 +64,10 @@ _Avoid_: Cart, order (before checkout)
 The Albert Heijn product remembered for a recipe ingredient or a Staple, bought without asking again.
 _Avoid_: Mapping, match
 
+**Match**:
+The Albert Heijn product, or none, chosen for one ingredient line of a Locked Week Menu's Recipes when filling a Basket. A Match comes from the line's Pinned Product, or is new; a new Match becomes a Pinned Product once an adult confirms it.
+_Avoid_: Mapping, Pinned Product (for a choice not yet confirmed)
+
 **Cupboard Ingredient**:
 A long-life recipe ingredient (tins, dried legumes, rice, less common spices) that the household is asked about each time a Basket is filled, because it may already be in the house. Unlike an Ask Staple, it is needed for a dinner.
 _Avoid_: Pantry item

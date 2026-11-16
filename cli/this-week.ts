@@ -1,6 +1,6 @@
 import type { DisplayBundle, MenuDay } from "../bundle/bundle.ts";
+import { dayLabel, timeLabel } from "../bundle/dates.ts";
 import { familyNotes, type NoteLine } from "./adapters/apple-notes/notes.ts";
-import { dayLabel } from "./check.ts";
 import type { Config } from "./config.ts";
 
 /**
@@ -32,10 +32,4 @@ function thisWeekLines(bundle: DisplayBundle, now: Date): NoteLine[] {
     for (const day of week.days) lines.push(`${dayLabel(day.date)}: ${dinner(day)}`);
   }
   return lines;
-}
-
-/** Local time, e.g. "Fri 20 Nov 18:00". */
-function timeLabel(d: Date): string {
-  const date = [d.getFullYear(), d.getMonth() + 1, d.getDate()].map((n) => String(n).padStart(2, "0")).join("-");
-  return `${dayLabel(date)} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }

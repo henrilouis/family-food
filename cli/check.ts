@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { MenuDay } from "../bundle/bundle.ts";
+import { dayLabel } from "../bundle/dates.ts";
 import { parseAmount } from "./amount.ts";
 import { isPublished } from "./build-bundle.ts";
 import { findRecipeNote, linkTarget, NoteError, parseRecipe, parseWeekMenu, readNotes, readWeekMenuNotes, RECIPE_FOLDERS, weekStartOf, type Note } from "./vault.ts";
@@ -156,15 +157,6 @@ function amountProblems(note: Note): string[] {
     problems.push(e.problem);
   }
   return problems;
-}
-
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-/** "2026-11-21" → "Sat 21 Nov", as a Week Menu's Day column writes it. */
-export function dayLabel(date: string): string {
-  const d = new Date(`${date}T00:00:00Z`);
-  return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
 }
 
 /** The check as text for a person: one line per problem, then a count. */

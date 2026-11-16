@@ -1,11 +1,20 @@
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { addDays } from "../bundle/kitchen-day.ts";
+import { addDays, dayLabel, localDate } from "../bundle/dates.ts";
 import { staplesThisWeek } from "./basket.ts";
-import { dayLabel } from "./check.ts";
-import { findRecipeNote, linkTarget, parseWeekMenu, readNotes, readWeekMenuNotes, NoteError, RECIPE_FOLDERS, VaultError, weekStartOf, type Note } from "./vault.ts";
-
-const WEEK_MENUS = "Week menus";
+import {
+  findRecipeNote,
+  linkTarget,
+  NoteError,
+  parseWeekMenu,
+  readNotes,
+  readWeekMenuNotes,
+  RECIPE_FOLDERS,
+  VaultError,
+  WEEK_MENUS,
+  weekStartOf,
+  type Note,
+} from "./vault.ts";
 
 /** The Week Menu a Planning Session at `now` plans: the next Saturday → Friday, and whether its Saturday delivery is missed. */
 export type PlannedWeek = {
@@ -92,9 +101,9 @@ export async function planContext(vault: string, now: Date): Promise<PlanContext
       cuisine: text(p.cuisine),
       base: list(p.base),
       double: p.double === true,
-      activeMinutes: number(p.active_minutes),
-      totalMinutes: number(p.total_minutes),
-      serves: number(p.serves),
+      activeMinutes: numberProperty(p.active_minutes),
+      totalMinutes: numberProperty(p.total_minutes),
+      serves: numberProperty(p.serves),
       sides: list(p.sides).flatMap((side) => linkTarget(side) ?? []),
       source: text(p.source),
       novel: p.novel === true,
@@ -344,7 +353,8 @@ function list(value: unknown): string[] {
   return (value === undefined || value === null ? [] : [value].flat()).flatMap((item) => text(item) ?? []);
 }
 
-function number(value: unknown): number | null {
+/** A number property, or null when it isn't a number. */
+function numberProperty(value: unknown): number | null {
   return typeof value === "number" ? value : null;
 }
 
@@ -388,9 +398,4 @@ async function plannedWeek(vault: string, now: Date): Promise<PlannedWeek> {
 /** A Week Menu's file name, after its Saturday: "Week 2026-11-28.md". */
 export function weekMenuName(weekStart: string): string {
   return `Week ${weekStart}.md`;
-}
-
-/** The local calendar date at `now`, as YYYY-MM-DD. */
-function localDate(now: Date): string {
-  return [now.getFullYear(), now.getMonth() + 1, now.getDate()].map((n) => String(n).padStart(2, "0")).join("-");
 }
