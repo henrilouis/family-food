@@ -1,3 +1,4 @@
+import { fakesOnly } from "./config.ts";
 import { UserError } from "./user-error.ts";
 
 /** A recipe read from a web page's schema.org Recipe JSON-LD, cleaned up for the add-recipe skill. */
@@ -93,7 +94,7 @@ const MAX_REDIRECTS = 5;
 
 /** Tests serve recipe pages from this Mac; one that forgets to must not reach a real site. */
 function refuseOffMacUnderTest(url: URL): void {
-  if (process.env.VITEST && !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)) {
+  if (fakesOnly() && !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)) {
     throw new RecipePageError(`Under test, food recipe fetch will only fetch from this Mac, not ${url.href}`);
   }
 }

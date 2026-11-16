@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { fakesOnly } from "../../config.ts";
 import { AppleNotesError, AppleNotesWriteError, FOLDER, type NotesClient } from "./client.ts";
 
 // Notes reaches a folder shared by another Apple ID like any other folder of the iCloud account.
@@ -37,7 +38,7 @@ export function osascriptNotesClient(): NotesClient {
 
 function osascript(script: string, args: string[], failure: typeof AppleNotesError): Promise<string> {
   // A safety net: tests must never touch the household's real notes, only the fake.
-  if (process.env.VITEST) return Promise.reject(new failure("The real Apple Notes are off in tests; use the apple-notes fake."));
+  if (fakesOnly()) return Promise.reject(new failure("The real Apple Notes are off in tests; use the apple-notes fake."));
   return new Promise((resolve, reject) => {
     execFile("osascript", ["-e", script, ...args], { timeout: 60_000, maxBuffer: 16 * 1024 * 1024 }, (error, stdout, stderr) => {
       if (!error) return resolve(stdout.replace(/\n$/, ""));

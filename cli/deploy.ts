@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { displayTarget } from "./adapters/display-target.ts";
+import { readConfig } from "./config.ts";
 import { writePage } from "./page.ts";
 import { UserError } from "./user-error.ts";
 
@@ -38,7 +39,7 @@ async function guard(): Promise<void> {
  */
 export async function deploy(log: (line: string) => void): Promise<void> {
   await guard();
-  const target = await displayTarget();
+  const target = displayTarget(await readConfig());
   log((await target.setup(path.join(checkout, "pi"))).trimEnd());
   const page = await mkdtemp(path.join(os.tmpdir(), "food-page-"));
   try {

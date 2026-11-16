@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { cp, mkdir, readdir, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { readConfig } from "../config.ts";
+import type { Config } from "../config.ts";
 import { UserError } from "../user-error.ts";
 
 /**
@@ -38,8 +38,8 @@ export class DisplayTargetError extends UserError {}
 export class DisplayTargetUnreachable extends DisplayTargetError {}
 
 /** The display target the local config asks for: the fake when `fakes["display-target"]` is set, else the Pi. */
-export async function displayTarget(): Promise<DisplayTarget> {
-  const fake = (await readConfig()).fakes?.["display-target"];
+export function displayTarget(config: Config): DisplayTarget {
+  const fake = config.fakes?.["display-target"];
   return fake ? new FakeDisplayTarget(fake) : new SshDisplayTarget(SSH_HOST);
 }
 

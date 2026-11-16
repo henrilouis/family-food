@@ -103,6 +103,8 @@ npm test
 npm run typecheck
 ```
 
+`vitest.config.ts` sets `FOOD_FAKES_ONLY=1` for every test and the CLI processes they start: the real AH, Apple Notes and recipe sites off this Mac then refuse, so a test that forgets its fake reaches nothing real.
+
 The sample bundles in `samples/bundles/` are written by the CLI tests and read by the page tests. After an intended change to the bundle, update them with `npx vitest run -u`.
 
 The browser tests (`display/test/*.browser.test.ts`) drive the page served by `food preview` in headless Google Chrome through `playwright-core`, so Chrome must be installed. They fix the page's clock with Playwright's clock.

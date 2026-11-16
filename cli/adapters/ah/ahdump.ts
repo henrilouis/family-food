@@ -1,6 +1,7 @@
 import { execFile, spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { fakesOnly } from "../../config.ts";
 import {
   AhError,
   AhLoginError,
@@ -34,7 +35,7 @@ function failure(code: number | null, stderr: string): Error {
 export function ahdumpClient(tokenFile: string): AhClient {
   const ahdump = (args: string[], input?: string): Promise<string> =>
     new Promise((resolve, reject) => {
-      if (process.env.VITEST) return reject(new AhError("The real AH is off in tests; use the ah fake."));
+      if (fakesOnly()) return reject(new AhError("The real AH is off in tests; use the ah fake."));
       const child = execFile(binary, ["-auth", tokenFile, ...args], { maxBuffer: 16 * 1024 * 1024 }, (error, stdout, stderr) => {
         if (!error) return resolve(stdout);
         if ((error as NodeJS.ErrnoException).code === "ENOENT") return reject(notBuilt());
@@ -48,7 +49,7 @@ export function ahdumpClient(tokenFile: string): AhClient {
   return {
     login: () =>
       new Promise((resolve, reject) => {
-        if (process.env.VITEST) return reject(new AhError("The real AH is off in tests; use the ah fake."));
+        if (fakesOnly()) return reject(new AhError("The real AH is off in tests; use the ah fake."));
         // The person logging in sees ahdump's messages, e.g. the login URL in case the browser doesn't open.
         const child = spawn(binary, ["-auth", tokenFile, "login"], { stdio: "inherit" });
         child.on("error", (error) => reject((error as NodeJS.ErrnoException).code === "ENOENT" ? notBuilt() : error));
