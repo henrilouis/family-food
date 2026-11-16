@@ -1,11 +1,11 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { AhError, type AhBasket, type AhBasketAdditions, type AhClient, type AhOrder, type AhProduct } from "./client.ts";
+import { AhError, AhLoginError, type AhBasket, type AhBasketAdditions, type AhClient, type AhOrder, type AhProduct } from "./client.ts";
 
 /** The fake's Mijn lijst in `basket.json`: products by webshop id, and free-text notes. */
 type FakeBasket = AhBasketAdditions;
 
-type Mode = { mode: "order placed"; date: string; status?: string };
+type Mode = { mode: "order placed"; date: string; status?: string } | { mode: "login expired"; loginFixesIt?: boolean };
 
 /**
  * The fake AH. Its state is plain JSON in `folder`, so tests can seed it:
@@ -18,6 +18,9 @@ type Mode = { mode: "order placed"; date: string; status?: string };
  * - `mode.json`: how AH behaves; missing means all is well.
  *   `{ "mode": "order placed", "date": "2026-11-28", "status": "SUBMITTED" }`: the order for delivery on `date`
  *   is checked out (`status` defaults to SUBMITTED; REOPENED means reopened for changes)
+ *   `{ "mode": "login expired" }`: AH refuses the user token; logging in again doesn't help, unless
+ *   `"loginFixesIt": true`, when a login ends this mode
+ * - `logins.json`: how many times someone logged in
  * Logging in needs no browser: it writes a made-up token to the token file, as the real login would,
  * and each renewal rotates the made-up refresh token.
  */
@@ -35,6 +38,13 @@ export function fakeAhClient(folder: string, tokenFile: string): AhClient {
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);
     const catalogue = await state<AhProduct[]>("products.json", []);
     return catalogue.filter((p) => words.every((word) => p.title.toLowerCase().includes(word)));
+  };
+
+  const mode = () => state<Mode | null>("mode.json", null);
+
+  /** Fails like AH does in the current mode, for a request with the user token. */
+  const asUser = async () => {
+    if ((await mode())?.mode === "login expired") throw new AhLoginError("AH login expired. Run `food ah login` again.");
   };
 
   const readBasket = () => state<FakeBasket>("basket.json", { products: [], notes: [] });
@@ -56,18 +66,24 @@ export function fakeAhClient(folder: string, tokenFile: string): AhClient {
 
   return {
     async login() {
+      const current = await mode();
+      if (current?.mode === "login expired" && current.loginFixesIt) await rm(path.join(folder, "mode.json"));
+      await writeFile(path.join(folder, "logins.json"), String((await state<number>("logins.json", 0)) + 1));
       await writeFile(tokenFile, JSON.stringify({ access_token: "fake-access", refresh_token: "fake-refresh-1" }));
     },
     async refreshLogin() {
+      await asUser();
       const token = JSON.parse(await readFile(tokenFile, "utf8"));
       const renewals = Number(String(token.refresh_token).split("-").pop()) || 0;
       await writeFile(tokenFile, JSON.stringify({ ...token, refresh_token: `fake-refresh-${renewals + 1}` }));
     },
     async searchProducts(query, token) {
+      if (token === "user") await asUser();
       const bought = token === "user" ? await state<number[]>("previously-bought.json", []) : [];
       return (await search(query)).map((p) => ({ ...p, isPreviouslyBought: bought.includes(p.webshopId) }));
     },
     async searchByPurchaseFrequency(query) {
+      await asUser();
       const bought = await state<number[]>("previously-bought.json", []);
       const rank = (p: AhProduct) => (bought.includes(p.webshopId) ? bought.indexOf(p.webshopId) : Infinity);
       return (await search(query))
@@ -75,9 +91,11 @@ export function fakeAhClient(folder: string, tokenFile: string): AhClient {
         .sort((a, b) => rank(a) - rank(b));
     },
     async basket() {
+      await asUser();
       return asAh(await readBasket());
     },
     async addToBasket(additions) {
+      await asUser();
       const catalogue = await state<AhProduct[]>("products.json", []);
       const unknown = additions.products.filter(({ id }) => !catalogue.some((p) => p.webshopId === id));
       if (unknown.length) throw new AhError(`AH doesn't know product ${unknown.map((p) => p.id).join(", ")}`);
@@ -94,9 +112,10 @@ export function fakeAhClient(folder: string, tokenFile: string): AhClient {
       return asAh(basket);
     },
     async openOrders(): Promise<AhOrder[]> {
-      const mode = await state<Mode | null>("mode.json", null);
-      if (mode?.mode !== "order placed") return [];
-      return [{ orderId: 1, delivery: { status: mode.status ?? "SUBMITTED", slot: { date: mode.date } } }];
+      await asUser();
+      const current = await mode();
+      if (current?.mode !== "order placed") return [];
+      return [{ orderId: 1, delivery: { status: current.status ?? "SUBMITTED", slot: { date: current.date } } }];
     },
   };
 }

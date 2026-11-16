@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { AhGateway } from "./adapters/ah/gateway.ts";
+import { AhError, AhLoginError, type AhGateway } from "./adapters/ah/gateway.ts";
 import {
   findRecipeNote,
   NoteError,
@@ -323,15 +323,39 @@ export type BasketOutcome =
    */
   | { kind: "filled"; plan: BasketPlan; change: BasketChange; products: FilledProduct[]; total: number }
   /** The coming Saturday's order is placed: nothing was written to AH. */
-  | { kind: "order placed"; plan: BasketPlan; change: BasketChange; order: { id: number; status: string } };
+  | { kind: "order placed"; plan: BasketPlan; change: BasketChange; order: { id: number; status: string } }
+  /** AH refused the login, also after logging in again: nothing was written to AH. */
+  | { kind: "login failed"; plan: BasketPlan; change: BasketChange; error: string };
 
 /**
  * Adds to Mijn lijst what the plan needs beyond what an earlier run recorded: products merge into lines already
  * there, unmatched items go in as free-text notes. Never removes anything; what is no longer needed is only listed.
- * Writes nothing once the coming Saturday's order is placed.
+ * Writes nothing once the coming Saturday's order is placed. When AH refuses the login, `log`s a prompt and runs
+ * the browser login once; if AH still refuses, writes nothing.
  */
-export async function fillBasket(plan: BasketPlan, gateway: AhGateway): Promise<BasketOutcome> {
+export async function fillBasket(plan: BasketPlan, gateway: AhGateway, log: (line: string) => void): Promise<BasketOutcome> {
   const change = changeSince(plan);
+  try {
+    return await fillWith(gateway, plan, change);
+  } catch (error) {
+    if (!(error instanceof AhLoginError)) throw error;
+  }
+  log("AH login expired: log in again in the browser window that opens.");
+  try {
+    await gateway.login();
+  } catch (error) {
+    if (!(error instanceof AhError)) throw error;
+    return { kind: "login failed", plan, change, error: error.message };
+  }
+  try {
+    return await fillWith(gateway, plan, change);
+  } catch (error) {
+    if (!(error instanceof AhLoginError)) throw error;
+    return { kind: "login failed", plan, change, error: error.message };
+  }
+}
+
+async function fillWith(gateway: AhGateway, plan: BasketPlan, change: BasketChange): Promise<BasketOutcome> {
   const order = await gateway.placedOrder(plan.weekStart);
   if (order) return { kind: "order placed", plan, change, order };
 
@@ -433,6 +457,12 @@ export function formatReport(outcome: BasketOutcome): string {
         change.removeNotes.length ? group("Unmatched, no longer needed", change.removeNotes) : "",
       ].join("");
     }
+    case "login failed":
+      return [
+        "The AH login failed again, so nothing was added to Mijn lijst.\n",
+        formatLinks(outcome.change),
+        formatShoppingList(outcome.plan, outcome.change),
+      ].join("");
   }
 }
 

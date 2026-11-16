@@ -215,7 +215,7 @@ async function basket(args: string[]): Promise<void> {
   const { values, positionals } = parseArgs({ args: rest, allowPositionals: true, options: { week: { type: "string" } } });
   if (positionals.length !== 1 || !values.week) throw new UsageError(usage);
   const plan = await planBasket(await vaultPath(), values.week, await readBasketInput(positionals[0]));
-  const outcome = await fillBasket(plan, ahGateway(await readConfig()));
+  const outcome = await fillBasket(plan, ahGateway(await readConfig()), (line) => process.stdout.write(line + "\n"));
   await writeBasketSection(outcome);
   process.stdout.write(formatReport(outcome));
   process.exitCode = exitCode(outcome);

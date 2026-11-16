@@ -658,3 +658,54 @@ describe("food basket fill once the order is placed", () => {
     expect(quantities(await box.basket())).toEqual({ 1: 1 });
   });
 });
+
+describe("food basket fill when AH fails", () => {
+  const catalogue = [
+    { webshopId: 1, title: "AH Spaghetti 500 g", priceBeforeBonus: 1.29 },
+    { webshopId: 2, title: "AH Spinazie 400 g", priceBeforeBonus: 2.19 },
+  ];
+  const matches: Match[] = [
+    { recipe: "Pasta", line: "500g spaghetti", product: 1, packFraction: 1, kind: "Cupboard Ingredient", title: "AH Spaghetti 500 g" },
+    { recipe: "Pasta", line: "400g spinach", product: 2, packFraction: 1, kind: "Fresh", title: "AH Spinazie 400 g" },
+    { recipe: "Pasta", line: "10 basil leaves", product: null },
+  ];
+  async function pastaWeek() {
+    const box = await basketBox(catalogue);
+    await box.recipe("Pasta", ["*500g* spaghetti", "*400g* spinach", "*10* basil leaves"]);
+    await box.weekMenu([["Pasta", "", ""]]);
+    return box;
+  }
+  const logins = async (box: { ah: string }) => Number(await readFile(path.join(box.ah, "logins.json"), "utf8"));
+
+  test("with the login expired, prompts one re-login, then gives add-multiple links and the shopping list", async () => {
+    const box = await pastaWeek();
+    await box.mode({ mode: "login expired" });
+    const loginsBefore = await logins(box);
+
+    const result = await box.fill(matches);
+
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(2);
+    expect((await logins(box)) - loginsBefore).toBe(1);
+    expect(await box.requests()).toEqual([]);
+    expect(result.stdout).toMatch(/^AH login expired: log in again in the browser window that opens\.\n/);
+    expect(result.stdout).toContain("The AH login failed again, so nothing was added to Mijn lijst.\n");
+    expect(result.stdout).toContain("Links:\n- https://www.ah.nl/mijnlijst/add-multiple?p=1:1&p=2:1\n");
+    expect(result.stdout).toContain(
+      "Shopping list:\nFresh:\n- 1 × AH Spinazie 400 g: spinach\nCupboard Ingredients:\n- 1 × AH Spaghetti 500 g: spaghetti\nUnmatched:\n- basil leaves (10)\n",
+    );
+    expect(await readFile(box.weekMenuFile(), "utf8")).not.toContain("## Basket");
+  });
+
+  test("fills Mijn lijst once the re-login works", async () => {
+    const box = await pastaWeek();
+    await box.mode({ mode: "login expired", loginFixesIt: true });
+
+    const result = await box.fill(matches);
+
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(0);
+    expect(result.stdout).toMatch(/^AH login expired: log in again in the browser window that opens\.\nAdded to Mijn lijst:\n/);
+    expect(quantities(await box.basket())).toEqual({ 1: 1, 2: 1 });
+  });
+});
