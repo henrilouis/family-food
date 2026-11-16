@@ -34,6 +34,57 @@ export type AhOrder = {
   delivery?: { status?: string; slot?: { date?: string } | null } | null;
 };
 
+/** An Allerhande recipe's rating; `average` is in stars out of 5. */
+export type AhRecipeRating = { average?: number | null; count?: number | null };
+
+export type AhRecipeTag = { key: string; value: string };
+
+/** An Allerhande recipe in search results, as AH's GraphQL `recipeSearchV2` returns it. Only the fields the gateway reads. */
+export type AhRecipeSummary = {
+  id: number;
+  title: string;
+  slug?: string | null;
+  /** Minutes: `cook` is the hands-on time (bereidingstijd), `oven` and `wait` come on top. */
+  time?: { cook?: number | null; oven?: number | null; wait?: number | null } | null;
+  serving?: { number?: number | null } | null;
+  rating?: AhRecipeRating | null;
+  tags?: AhRecipeTag[] | null;
+};
+
+/** An Allerhande recipe as AH's GraphQL `recipe(id)` returns it. Only the fields the gateway reads. */
+export type AhRecipe = {
+  id: number;
+  title: string;
+  /** The web page's path: "/allerhande/recept/R-R1302900/witte-koolorzo". */
+  href?: string | null;
+  cookTime?: number | null;
+  ovenTime?: number | null;
+  waitTime?: number | null;
+  servings?: { number?: number | null } | null;
+  ingredients?: {
+    text?: string | null;
+    quantity?: number | null;
+    quantityUnit?: { singular?: string | null; plural?: string | null } | null;
+    name?: { singular?: string | null; plural?: string | null } | null;
+  }[] | null;
+  preparation?: { steps?: string[] | null } | null;
+  tags?: AhRecipeTag[] | null;
+  rating?: AhRecipeRating | null;
+};
+
+/** One ingredient of an Allerhande recipe with the product AH suggests for it (GraphQL `recipeProductSuggestionsV2`). */
+export type AhRecipeProductSuggestion = {
+  optional?: boolean | null;
+  ingredient?: { name?: string | null; completeText?: string | null } | null;
+  productSuggestion?: {
+    quantity?: number | null;
+    product?: { id: number; title: string; salesUnitSize?: string | null; priceV2?: { now?: { amount: number } | null } | null } | null;
+  } | null;
+};
+
+/** Allerhande recipe search: free text and filter values by group, e.g. `{ "speciale-wensen": ["vegetarisch"] }`. */
+export type AhRecipeQuery = { text?: string; filters: Record<string, string[]>; size: number };
+
 /** What to add to Mijn lijst: products by webshop id, and free-text notes. Quantities are added to what is there. */
 export type AhBasketAdditions = {
   products: { id: number; quantity: number }[];
@@ -60,6 +111,12 @@ export interface AhClient {
   addToBasket(additions: AhBasketAdditions): Promise<AhBasket>;
   /** The open orders (GraphQL `orderFulfillments(status: OPEN)`), with the user token. */
   openOrders(): Promise<AhOrder[]>;
+  /** Allerhande recipe search (GraphQL `recipeSearchV2`, most relevant first), with an anonymous token. */
+  searchRecipes(query: AhRecipeQuery): Promise<AhRecipeSummary[]>;
+  /** One Allerhande recipe (GraphQL `recipe(id)`), with an anonymous token; null when AH has none with that id. */
+  recipe(id: number): Promise<AhRecipe | null>;
+  /** AH's product for each ingredient of an Allerhande recipe (GraphQL `recipeProductSuggestionsV2`), with an anonymous token. */
+  recipeProductSuggestions(id: number): Promise<AhRecipeProductSuggestion[]>;
 }
 
 /** A problem with AH that the person running `food` can act on; printed without a stack trace. */

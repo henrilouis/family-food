@@ -10,25 +10,26 @@ Also run `food plan sites` once. It prints each site's **track record** as JSON,
 
 ## 2. Find recipes
 
-Sources, all equal:
+Sources, all equal: no source gets priority, and the candidates are the recipes that best fill the gaps wherever they come from.
 
-| Language | Sites (open, with schema.org Recipe data) |
+| Source | Sites |
 |---|---|
-| Dutch | jaimyskitchen.nl, francescakookt.nl, keukenliefde.nl (`/recepten/` pages), leukerecepten.nl, dagelijksekost.vrt.be |
-| English | loveandlemons.com, cookieandkate.com, budgetbytes.com, bbcgoodfood.com, cookwithmanali.com, indianhealthyrecipes.com, themediterraneandish.com, thekitchn.com, thehappyfoodie.co.uk, rasamalaysia.com |
+| Allerhande (site `ah.nl`) | through AH's app API: `food ah recipes` |
+| Dutch, open | jaimyskitchen.nl, francescakookt.nl, keukenliefde.nl (`/recepten/` pages), leukerecepten.nl, dagelijksekost.vrt.be |
+| English, open | loveandlemons.com, cookieandkate.com, budgetbytes.com, bbcgoodfood.com, cookwithmanali.com, indianhealthyrecipes.com, themediterraneandish.com, thekitchn.com, thehappyfoodie.co.uk, rasamalaysia.com |
 
 Search them with the gaps as search terms:
-- web search limited to these sites, e.g. `site:loveandlemons.com OR site:cookwithmanali.com winter lentil curry`;
-- a site's WordPress search, `https://<site>/wp-json/wp/v2/posts?search=<term>&_fields=link` (Keukenliefde: `/wp-json/wp/v2/keu_recipe`), or its RSS feed at `/feed/` for what's new.
+- Allerhande: `food ah recipes [<Dutch words>] [--season lente|zomer|herfst|winter] [--cuisine <keuken>]`, e.g. `food ah recipes linzen --season winter --cuisine indiaas` (cuisine values are Allerhande's own Dutch ones: italiaans, indiaas, midden-oosters, …). It finds only vegetarian main courses and prints JSON candidates with `url`, `title`, `servings`, `activeMinutes`, `totalMinutes`, `tags` and `rating`;
+- the open sites: web search limited to them, e.g. `site:loveandlemons.com OR site:cookwithmanali.com winter lentil curry`, or a site's WordPress search, `https://<site>/wp-json/wp/v2/posts?search=<term>&_fields=link` (Keukenliefde: `/wp-json/wp/v2/keu_recipe`), or its RSS feed at `/feed/` for what's new.
 
-NYT Cooking, Serious Eats and The Guardian are excluded: leave their results out. Allerhande (ah.nl) can't be read yet. Keep the volume low: a handful of searches, and about ten recipe pages read per session.
+NYT Cooking, Serious Eats and The Guardian are excluded: leave their results out. Keep the volume low: a handful of searches, and about ten recipe pages read per session.
 
-Read each promising recipe with `food recipe fetch <url>`. Exit 3 or empty `steps`: read the page with your own web-fetch tool. Exit 2: the site is excluded; drop it. Its `rating` is `{value, count}`, `value` out of 5 and `count` the number of ratings (null when the site doesn't say), or null for an unrated page; for a page you read yourself, take the rating and count the page shows, if any.
+Read each promising recipe, from any source, with `food recipe fetch <url>` (Allerhande ones too: it reads them through the app API). Exit 3 or empty `steps`: read the page with your own web-fetch tool. Exit 2: the site is excluded; drop it. Exit 1 on an Allerhande URL: AH isn't answering; go on with the open sites. Its `rating` is `{value, count}`, `value` out of 5 and `count` the number of ratings (null when the site doesn't say), or null for an unrated recipe; Allerhande's ratings come in the same shape. For a page you read yourself, take the rating and count the page shows, if any.
 
 ## 3. Check every candidate
 
 A candidate stays only when all of these hold:
-- **Vegetarian**: every ingredient checked by add-recipe's meat-and-fish list (`.agents/skills/add-recipe/SKILL.md`, step 2), whatever the site's diet labels say. Meat or fish as a main part drops it; a minor animal ingredient add-recipe would swap (stock, fish sauce) is fine, and you mention the swap.
+- **Vegetarian**: every ingredient checked by add-recipe's meat-and-fish list (`.agents/skills/add-recipe/SKILL.md`, step 2), whatever the site's diet labels say, Allerhande's vegetarian filter included. Meat or fish as a main part drops it; a minor animal ingredient add-recipe would swap (stock, fish sauce) is fine, and you mention the swap.
 - Its URL is not in `rejectedSources`.
 - It is new: no Meal has the same `source` URL or title.
 - No Household Preferences Never item.

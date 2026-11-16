@@ -1,7 +1,18 @@
 import { execFile, spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { AhError, AhLoginError, AhUnavailableError, type AhBasket, type AhClient, type AhOrder, type AhProduct } from "./client.ts";
+import {
+  AhError,
+  AhLoginError,
+  AhUnavailableError,
+  type AhBasket,
+  type AhClient,
+  type AhOrder,
+  type AhProduct,
+  type AhRecipe,
+  type AhRecipeProductSuggestion,
+  type AhRecipeSummary,
+} from "./client.ts";
 
 /** Built by `npm run build:ahdump` from `ahdump/` in this repo. */
 const binary = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../ahdump/ahdump");
@@ -23,6 +34,7 @@ function failure(code: number | null, stderr: string): Error {
 export function ahdumpClient(tokenFile: string): AhClient {
   const ahdump = (args: string[], input?: string): Promise<string> =>
     new Promise((resolve, reject) => {
+      if (process.env.VITEST) return reject(new AhError("The real AH is off in tests; use the ah fake."));
       const child = execFile(binary, ["-auth", tokenFile, ...args], { maxBuffer: 16 * 1024 * 1024 }, (error, stdout, stderr) => {
         if (!error) return resolve(stdout);
         if ((error as NodeJS.ErrnoException).code === "ENOENT") return reject(notBuilt());
@@ -36,6 +48,7 @@ export function ahdumpClient(tokenFile: string): AhClient {
   return {
     login: () =>
       new Promise((resolve, reject) => {
+        if (process.env.VITEST) return reject(new AhError("The real AH is off in tests; use the ah fake."));
         // The person logging in sees ahdump's messages, e.g. the login URL in case the browser doesn't open.
         const child = spawn(binary, ["-auth", tokenFile, "login"], { stdio: "inherit" });
         child.on("error", (error) => reject((error as NodeJS.ErrnoException).code === "ENOENT" ? notBuilt() : error));
@@ -50,5 +63,12 @@ export function ahdumpClient(tokenFile: string): AhClient {
     basket: async (): Promise<AhBasket> => JSON.parse(await ahdump(["basket"])),
     addToBasket: async (additions): Promise<AhBasket> => JSON.parse(await ahdump(["basket-add"], JSON.stringify(additions))),
     openOrders: async (): Promise<AhOrder[]> => JSON.parse(await ahdump(["orders"])),
+    searchRecipes: async ({ text, filters, size }): Promise<AhRecipeSummary[]> => {
+      const filterArgs = Object.entries(filters).flatMap(([group, values]) => values.flatMap((value) => ["-filter", `${group}=${value}`]));
+      return JSON.parse(await ahdump(["recipes", "-size", String(size), ...filterArgs, "--", ...(text ? [text] : [])]));
+    },
+    recipe: async (id): Promise<AhRecipe | null> => JSON.parse(await ahdump(["recipe", String(id)])),
+    recipeProductSuggestions: async (id): Promise<AhRecipeProductSuggestion[]> =>
+      JSON.parse(await ahdump(["recipe-suggestions", String(id)])),
   };
 }

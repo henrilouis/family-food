@@ -18,9 +18,11 @@ The vault is the `vault` path in `food config`. Its recipe folders are `Meals`, 
 ## Steps
 
 1. **Read the recipe.**
-   - URL: run `food recipe fetch <url>`. It prints the page's schema.org Recipe as JSON (title, servings, yield, minutes, ingredients, steps, the site's cuisine and diet hints, language).
-     - Exit 2: a site the household never fetches from (NYT Cooking, Serious Eats, The Guardian) or Allerhande. Ask the adult to paste the recipe text; reading the page any other way is off limits.
-     - Exit 3 (no recipe data), or `steps` is empty: read the page with your own web-fetch tool and take the recipe from it.
+   - URL: run `food recipe fetch <url>`. It prints the recipe as JSON (title, servings, yield, minutes, ingredients, steps, the site's cuisine and diet hints, language): from the page's schema.org Recipe, or for an Allerhande recipe (`https://www.ah.nl/allerhande/recept/R-R<number>/…`) from AH's app API.
+     - Exit 2: a site the household never fetches from (NYT Cooking, Serious Eats, The Guardian), or an ah.nl page that isn't an Allerhande recipe. Ask the adult to paste the recipe text; reading the page any other way is off limits.
+     - Exit 3 (no recipe data), or `steps` is empty: read the page with your own web-fetch tool and take the recipe from it. This never applies to ah.nl, which blocks it: ask for the text.
+     - Exit 1 on an Allerhande URL: AH's app API didn't answer or has no such recipe. Pass the message on and ask the adult to paste the recipe text or try later.
+   - Allerhande recipes are Dutch, with decimal commas ("1,2 kg"). `prepMinutes` is Allerhande's hands-on time (bereidingstijd), `cookMinutes` its oven time, `totalMinutes` both plus any waiting. Its `vegetarisch` tag is a hint like any site's diet label: step 2 still applies.
    - Pasted text: use it as given.
    - Take ingredients and steps only from the source. When ingredients, amounts or the method are missing or unclear, ask the adult (all questions in one message) rather than filling the gaps.
    Done when you have the title, every ingredient line and every step.
@@ -112,7 +114,7 @@ Keeps for three days in the fridge; it thickens, so add a splash of water when r
 - `active_minutes` (hands-on) and `total_minutes` (including oven, soaking, rising): from the source's times when they look right, otherwise estimated from the Method. Weekday dinners are planned with `active_minutes` ≤ 45, so estimate honestly.
 - `cuisine`: one value from the fixed list; `base`: values from the fixed list, following that doc's rules.
 - `double`: true when it reheats well and scales to two days (curries, stews, chili, soups, bakes); false for crisp, fried, fresh or delicate dishes.
-- `source`: the recipe's URL; empty (`source:`) for pasted text without one.
+- `source`: the recipe's URL, as `url` in `food recipe fetch`'s output (for Allerhande, fill-basket reads AH's product suggestions from it); empty (`source:`) for pasted text without one.
 - `sides`: wikilinks to notes that exist in `Sides`, default first; `[]` when none fits.
 - `novel`: true only from the Planning Session. `reviewed`: always false.
 

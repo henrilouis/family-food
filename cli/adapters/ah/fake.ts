@@ -1,6 +1,18 @@
 import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { AhError, AhLoginError, AhUnavailableError, type AhBasket, type AhBasketAdditions, type AhClient, type AhOrder, type AhProduct } from "./client.ts";
+import {
+  AhError,
+  AhLoginError,
+  AhUnavailableError,
+  type AhBasket,
+  type AhBasketAdditions,
+  type AhClient,
+  type AhOrder,
+  type AhProduct,
+  type AhRecipe,
+  type AhRecipeProductSuggestion,
+  type AhRecipeSummary,
+} from "./client.ts";
 
 /** The fake's Mijn lijst in `basket.json`: products by webshop id, and free-text notes. */
 type FakeBasket = AhBasketAdditions;
@@ -25,6 +37,9 @@ type Mode =
  *   `"loginFixesIt": true`, when a login ends this mode
  *   `{ "mode": "AH down" }`: every request fails as when AH's ordering is down
  * - `logins.json`: how many times someone logged in
+ * - `recipes.json`: Allerhande, as AH's GraphQL `recipe(id)` returns recipes. Search finds those with every query
+ *   word in the title and, per filter group, a tag `{ key: <group>, value: <one of the values> }`
+ * - `recipe-suggestions.json`: AH's product suggestions by recipe id, as `recipeProductSuggestionsV2` returns them
  * Logging in needs no browser: it writes a made-up token to the token file, as the real login would,
  * and each renewal rotates the made-up refresh token.
  */
@@ -70,6 +85,18 @@ export function fakeAhClient(folder: string, tokenFile: string): AhClient {
       notes: basket.notes,
     };
   };
+
+  const recipes = () => state<AhRecipe[]>("recipes.json", []);
+
+  const summary = (r: AhRecipe): AhRecipeSummary => ({
+    id: r.id,
+    title: r.title,
+    slug: r.href?.split("/").pop() || null,
+    time: { cook: r.cookTime, oven: r.ovenTime, wait: r.waitTime },
+    serving: { number: r.servings?.number },
+    rating: r.rating,
+    tags: r.tags,
+  });
 
   return {
     async login() {
@@ -124,6 +151,25 @@ export function fakeAhClient(folder: string, tokenFile: string): AhClient {
       const current = await mode();
       if (current?.mode !== "order placed") return [];
       return [{ orderId: 1, delivery: { status: current.status ?? "SUBMITTED", slot: { date: current.date } } }];
+    },
+    async searchRecipes({ text, filters, size }) {
+      await request(false);
+      const words = (text ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+      const tagged = (r: AhRecipe, group: string, values: string[]) =>
+        (r.tags ?? []).some((tag) => tag.key === group && values.includes(tag.value));
+      return (await recipes())
+        .filter((r) => words.every((word) => r.title.toLowerCase().includes(word)))
+        .filter((r) => Object.entries(filters).every(([group, values]) => tagged(r, group, values)))
+        .slice(0, size)
+        .map(summary);
+    },
+    async recipe(id) {
+      await request(false);
+      return (await recipes()).find((r) => r.id === id) ?? null;
+    },
+    async recipeProductSuggestions(id) {
+      await request(false);
+      return (await state<Record<string, AhRecipeProductSuggestion[]>>("recipe-suggestions.json", {}))[id] ?? [];
     },
   };
 }

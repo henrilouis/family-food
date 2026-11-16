@@ -52,7 +52,9 @@ function refuseExcluded(url: URL): void {
     }
   }
   if (on("ah.nl")) {
-    throw new RecipePageRefused(`food can't read Allerhande recipes yet (ah.nl blocks automated reads). Paste the recipe text instead.`);
+    throw new RecipePageRefused(
+      `ah.nl blocks automated reads, so food reads only Allerhande recipes (https://www.ah.nl/allerhande/recept/R-R<number>/…), through AH's app API, not ${url.href}. Paste the recipe text instead.`,
+    );
   }
 }
 

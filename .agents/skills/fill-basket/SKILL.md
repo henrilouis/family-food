@@ -29,9 +29,9 @@ Run `food basket lines --week <week_start>`. It prints JSON `lines`, one per ing
 - `pinned`: the Pinned Product from Products.md (`product` id or null, `title`, `pack`, `kind`), or null;
 - `match`: for a pinned, non-optional line, its entry for `food basket fill`, ready to use. `packFraction: null` means the CLI couldn't compare the amount with the Pack: you work it out.
 
-Also read `<vault>/Staples.md` (Staple products are candidates for matching, and a Staple's product merges with the recipe line into one Basket line) and the Week Menu note's `## Basket` section if there is one: its `Have at home:` line and product lines hold the earlier run's answers.
+Also read `<vault>/Staples.md` (Staple products are candidates for matching, and a Staple's product merges with the recipe line into one Basket line), each bought Recipe's source (a Meal's `source` property, a Side's `Source:` line: an Allerhande URL there brings in its [Allerhande suggestions](#matching-order)), and the Week Menu note's `## Basket` section if there is one: its `Have at home:` line and product lines hold the earlier run's answers.
 
-Done when you have the JSON, the Staples and any earlier `## Basket`.
+Done when you have the JSON, the Staples, the Allerhande sources and any earlier `## Basket`.
 
 ### 3. Match every line
 
@@ -59,7 +59,7 @@ Done when every non-optional line has an entry with a kind, and every entry with
 
 One message, before anything is written. Leave out a part that is empty; when every part is empty, say "Every line is pinned and nothing to ask: filling the Basket." and go to step 6.
 
-1. **New matches**: each new match on one line: ingredient (Recipe) → AH title, pack price, estimated packs this week, the kind, and how you found it (bought before / cheapest per kg / nothing at AH, added as a note). Lines that share a product go on one line.
+1. **New matches**: each new match on one line: ingredient (Recipe) → AH title, pack price, estimated packs this week, the kind, and how you found it (Allerhande suggestion / bought before / cheapest per kg / nothing at AH, added as a note). Lines that share a product go on one line.
 2. **Cupboard Ingredients this week**, pinned and new, those with a product: "Which of these are at home?" When the note already has a `## Basket` section (a run after an earlier one), ask only about Cupboard Ingredients it doesn't cover: leave out those in its product lines (`(id <id>)`) and those its `Have at home:` line names.
 3. **Optional, not added**: each optional line with its Recipe; added only if the adult names it.
 
@@ -110,8 +110,9 @@ After the CLI's output, add in a few lines: how many matches you pinned, any pac
 Take the first source that gives a sensible product. Before searching, translate the ingredient to the Dutch word AH sells it under (the product as sold, without preparation: "red split lentils" → "rode linzen", "spring onion" → "lente-ui", "coriander" → "koriander").
 
 1. **Pinned Product**: the line's `pinned`; its `match` is the entry (step 3).
-2. **Previously bought**: `food ah bought "<Dutch>"`, most frequently bought first. Take the first result that is the ingredient itself (not a soup, mix or ready meal of it).
-3. **Lowest unit price**: `food ah search "<Dutch>" --need <amount>`, with the week's total need (the line's amount × `times`, as 400g, 1.5l or a count) when it is in g, ml or pieces. Results come cleaned up (no sponsored, unorderable or multipack products, no pack that wastes more than about twice the need) and cheapest per kg, l or piece first, the AH house brand first on a tie. Take the first that is the ingredient itself.
-4. **Nothing sensible**: `product: null`.
+2. **Allerhande suggestion**, only for a Recipe whose source is an Allerhande URL (`https://www.ah.nl/allerhande/recept/…`). Run `food ah suggestions <source>` once per such Recipe. It lists Allerhande's Dutch ingredient lines, each with AH's `product` (`id`, `title`, `size`, `price`) or null. The Recipe's lines are add-recipe's English translations of those lines: find the line's own ingredient among them and take its product when it is the ingredient itself. Work out the pack fraction from the line's amount and the product's `size` as for any product; `packs` (whole packs for the recipe as written) is only a cross-check. Exit 1 (AH not answering): go on with step 3.
+3. **Previously bought**: `food ah bought "<Dutch>"`, most frequently bought first. Take the first result that is the ingredient itself (not a soup, mix or ready meal of it).
+4. **Lowest unit price**: `food ah search "<Dutch>" --need <amount>`, with the week's total need (the line's amount × `times`, as 400g, 1.5l or a count) when it is in g, ml or pieces. Results come cleaned up (no sponsored, unorderable or multipack products, no pack that wastes more than about twice the need) and cheapest per kg, l or piece first, the AH house brand first on a tie. Take the first that is the ingredient itself.
+5. **Nothing sensible**: `product: null`.
 
-An Always in House ingredient skips the search. When `food ah bought` says to log in, tell the adult a browser window opens and run `food ah login` once; if that fails, go on with step 3 (search works without the login).
+An Always in House ingredient skips the search. When `food ah bought` says to log in, tell the adult a browser window opens and run `food ah login` once; if that fails, go on with step 4 (search works without the login).

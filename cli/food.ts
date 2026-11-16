@@ -2,7 +2,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { AhError, ahGateway, parseAmount } from "./adapters/ah/gateway.ts";
+import { AhError, ahGateway, allerhandeRecipeId, parseAmount } from "./adapters/ah/gateway.ts";
 import { BasketInputError, exitCode, fillBasket, formatReport, planBasket, readBasketInput, writeBasketSection } from "./basket.ts";
 import { AppleNotesError, familyNotes, FOOD_WISHES, RECIPES_TO_ADD, type Deletion } from "./adapters/apple-notes/notes.ts";
 import { buildBundle, publishedWeekMenusWith } from "./build-bundle.ts";
@@ -43,6 +43,13 @@ Commands:
                         --need (e.g. 400g, 1.5l, 3 for pieces) drops packs that would waste too much
   ah bought <query>     Search the products the household bought before, most often bought first (JSON)
   ah basket             Show Mijn lijst (JSON): products with title, quantity and price, and free-text notes
+  ah recipes [<text>] [--season <seizoen>] [--cuisine <keuken>] [--size <n>]
+                        Search Allerhande's vegetarian main courses (JSON): url, title, servings, minutes, tags
+                        and rating as in recipe fetch; season and cuisine are Allerhande's Dutch values
+                        (winter, italiaans); no advertorials or baby food
+  ah suggestions <allerhande url>
+                        AH's product for each ingredient of an Allerhande recipe (JSON): ingredient, optional,
+                        product {id, title, size, price} or null, packs
   basket lines --week <YYYY-MM-DD>
                         The ingredient lines of the Recipes a Locked Week Menu buys (JSON): recipe, line,
                         ingredient, times (dinners), optional, the Pinned Product from Products.md, and for
@@ -72,8 +79,10 @@ Commands:
                         Exit 2 when Notes won't take the change: delete the "deleteByHand" items by hand.
                         (food publish also rewrites the "This week" note; a failure there only warns)
   recipe fetch <url>    Read the schema.org Recipe on an open recipe site's page (JSON, with its rating out
-                        of 5 and how many rated it), fetched with an honest User-Agent. Exit 2: a site food never fetches from (NYT Cooking,
-                        Serious Eats, The Guardian) or Allerhande: ask for the recipe text instead.
+                        of 5 and how many rated it), fetched with an honest User-Agent; an Allerhande recipe
+                        (ah.nl/allerhande/recept/R-R<number>) is read through AH's app API in the same shape.
+                        Exit 2: a site food never fetches from (NYT Cooking, Serious Eats, The Guardian) or
+                        another ah.nl page: ask for the recipe text instead.
                         Exit 3: no recipe data (fetch failed or none on the page): read the page another way
   recipe published <name> [--json]
                         Name the published Week Menus that link Recipe <name> (as a dinner or a side):
@@ -285,8 +294,10 @@ async function recipe(args: string[]): Promise<void> {
     case "fetch": {
       if (rest.length !== 1) throw new UsageError(usage);
       if (!/^https?:$/.test(URL.parse(rest[0])?.protocol ?? "")) throw new UsageError(`Not a web address: "${rest[0]}"`);
+      const allerhande = allerhandeRecipeId(rest[0]);
       try {
-        process.stdout.write(JSON.stringify(await fetchRecipePage(rest[0]), null, 2) + "\n");
+        const page = allerhande === null ? await fetchRecipePage(rest[0]) : await ahGateway(await readConfig()).allerhandeRecipe(allerhande);
+        process.stdout.write(JSON.stringify(page, null, 2) + "\n");
       } catch (error) {
         if (!(error instanceof RecipePageRefused || error instanceof RecipePageError)) throw error;
         process.stderr.write(error.message + "\n");
@@ -335,6 +346,23 @@ async function ah(args: string[]): Promise<void> {
     case "basket":
       print(await gateway.readBasket());
       return;
+    case "recipes": {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        allowPositionals: true,
+        options: { season: { type: "string" }, cuisine: { type: "string" }, size: { type: "string" } },
+      });
+      const size = values.size === undefined ? undefined : Number(values.size);
+      if (size !== undefined && !(Number.isInteger(size) && size > 0)) throw new UsageError(`--size must be a whole number, not "${values.size}"`);
+      print(await gateway.searchAllerhande({ text: positionals.join(" ") || undefined, season: values.season, cuisine: values.cuisine, size }));
+      return;
+    }
+    case "suggestions": {
+      const id = rest.length === 1 ? allerhandeRecipeId(rest[0]) : null;
+      if (id === null) throw new UsageError(`Give one Allerhande recipe address (https://www.ah.nl/allerhande/recept/R-R<number>/…).`);
+      print(await gateway.allerhandeSuggestions(id));
+      return;
+    }
     default:
       throw new UsageError(usage);
   }
