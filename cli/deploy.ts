@@ -6,11 +6,12 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { displayTarget } from "./adapters/display-target.ts";
 import { writePage } from "./page.ts";
+import { UserError } from "./user-error.ts";
 
 const checkout = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 /** Deploy stopped before touching the Kitchen Display Pi; the message says why. */
-export class DeployRefused extends Error {}
+export class DeployRefused extends UserError {}
 
 const git = async (...args: string[]) => (await promisify(execFile)("git", args, { cwd: checkout })).stdout.trim();
 

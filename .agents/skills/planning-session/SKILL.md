@@ -114,8 +114,8 @@ Done when every deviation is a line or a standing edit, and the adult has seen t
 Only on an explicit "lock it" (or the adult's clear equivalent).
 
 1. Run `food plan context` again. If `week.late` has become true, follow the [Late path](#late-path) before writing.
-2. Write the [plan JSON](#the-plan-json) to a temp file and run `food plan write <file>`. Exit 1 names what doesn't fit; fix the plan and run it again.
-3. **Save the Novel Recipe**, unless it carried over or waited (it is already in the vault): invoke the `add-recipe` skill with its URL (or text), `novel: true`, the title the plan used, and the folder `Meals`. If add-recipe refuses it (meat), tell the adult, agree another candidate, edit the new note's Novel day row and its `novel` / `novel_source` properties, and invoke add-recipe again.
+2. Write the [Week Menu JSON](#the-week-menu-json) to a temp file and run `food plan write <file>`. Exit 1 names what doesn't fit; fix the JSON and run it again.
+3. **Save the Novel Recipe**, unless it carried over or waited (it is already in the vault): invoke the `add-recipe` skill with its URL (or text), `novel: true`, the title the Week Menu used, and the folder `Meals`. If add-recipe refuses it (meat), tell the adult, agree another candidate, edit the new note's Novel day row and its `novel` / `novel_source` properties, and invoke add-recipe again.
 4. **Delete the honoured Wishes**: `food notes wishes delete <wish>... --json`, each Wish exactly as listed. Exit 2 (or exit 1): Notes won't take the change; tell the adult to delete the `deleteByHand` Wishes (or all honoured ones) by hand, and list them.
 5. **Publish**: `food publish`.
    - Exit 0, "Kitchen Display updated…": done.
@@ -125,7 +125,7 @@ Only on an explicit "lock it" (or the adult's clear equivalent).
 
 Done when the note is written, the Novel Recipe saved, the Wishes deleted or listed for deletion by hand, the week Published (or the adult told to publish at home), and `fill-basket` started.
 
-## The plan JSON
+## The Week Menu JSON
 
 ```json
 {

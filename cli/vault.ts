@@ -5,12 +5,13 @@ import type { Ingredient, IngredientGroup, MenuDay, Recipe, WeekMenu } from "../
 import { addDays } from "../bundle/dates.ts";
 import { parseRecipeAmount } from "./amount.ts";
 import { ingredientWords, markStep } from "./step.ts";
+import { UserError } from "./user-error.ts";
 
 /** The vault folder of the Week Menu notes. */
 export const WEEK_MENUS = "Week menus";
 
-/** A problem with the Recipe Vault's contents, reported to the user without a stack trace. */
-export class VaultError extends Error {}
+/** A problem with the Recipe Vault's contents. */
+export class VaultError extends UserError {}
 
 /** A problem in one note, which `food vault check` can report next to the others. */
 export class NoteError extends VaultError {

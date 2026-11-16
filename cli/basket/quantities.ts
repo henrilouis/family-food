@@ -1,6 +1,5 @@
-import path from "node:path";
-import { readFile } from "node:fs/promises";
 import { ingredientName, KINDS, sameIngredient, type Kind } from "../ingredient.ts";
+import { readJsonFile } from "../json-file.ts";
 import { UserError } from "../user-error.ts";
 import { lineText, weekLines } from "../week-lines.ts";
 import { basketRecord, type BasketRecord } from "./section.ts";
@@ -180,13 +179,7 @@ function quantityText(q: number): string {
 
 /** Reads the skill's list from a JSON file. */
 export async function readBasketInput(file: string): Promise<BasketInput> {
-  const text = await readFile(path.resolve(file), "utf8");
-  let input: BasketInput;
-  try {
-    input = JSON.parse(text);
-  } catch (error) {
-    throw new BasketInputError(`${file} is not JSON: ${(error as Error).message}`);
-  }
+  const input = (await readJsonFile(file, "a JSON list of Matches")) as BasketInput;
   if (!Array.isArray(input?.lines)) throw new BasketInputError(`${file}: expected {"lines": [...], "haveAtHome": [...]}`);
   return input;
 }

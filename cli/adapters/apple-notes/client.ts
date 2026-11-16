@@ -1,3 +1,5 @@
+import { UserError } from "../../user-error.ts";
+
 /** The shared Apple Notes folder the partner takes part through (ADR 0001). */
 export const FOLDER = "Family food";
 
@@ -13,7 +15,7 @@ export interface NotesClient {
 }
 
 /** Apple Notes could not be read or written; the message says what Notes said. */
-export class AppleNotesError extends Error {}
+export class AppleNotesError extends UserError {}
 
 /** A write to a note failed or didn't stick: whatever was to change must be changed by hand. */
 export class AppleNotesWriteError extends AppleNotesError {}

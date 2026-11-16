@@ -6,6 +6,7 @@ import type { Match } from "./basket/quantities.ts";
 import { ingredientName, KINDS, sameIngredient, type Kind } from "./ingredient.ts";
 import { weekLines } from "./week-lines.ts";
 import { NoteError, readNote, tableRows, type Note } from "./vault.ts";
+import { UserError } from "./user-error.ts";
 
 const PRODUCTS_NOTE = "Products.md";
 
@@ -111,8 +112,8 @@ export async function readPinnedProducts(vault: string): Promise<PinnedProduct[]
     });
 }
 
-/** A pin `food products pin` can't write; printed without a stack trace. */
-export class PinInputError extends Error {}
+/** A pin `food products pin` can't write. */
+export class PinInputError extends UserError {}
 
 const NEW_PRODUCTS_NOTE = `# Products
 

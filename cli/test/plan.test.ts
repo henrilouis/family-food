@@ -289,7 +289,7 @@ describe("food plan write", () => {
     expect(await read(vault, "Week menus/Week 2026-11-28.md")).toContain("## Staples this week\n- Ask Staples: tea\n");
   });
 
-  test("refuses a plan that doesn't make a Week Menu, writing nothing", async () => {
+  test("refuses a Locked Week Menu that doesn't make a note, writing nothing", async () => {
     const { run, vault } = await sandbox();
     const refused = async (value: unknown) => {
       const result = await run(["plan", "write", await writePlan(vault, value)]);

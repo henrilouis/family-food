@@ -1,3 +1,5 @@
+import { UserError } from "./user-error.ts";
+
 /** A recipe read from a web page's schema.org Recipe JSON-LD, cleaned up for the add-recipe skill. */
 export type RecipePage = {
   url: string;
@@ -29,10 +31,10 @@ export type Rating = { value: number; count: number | null };
 export const USER_AGENT = "family-food/0.1 (personal household recipe import; +https://github.com/henrilouis/family-food)";
 
 /** A recipe page that couldn't be read; the skill falls back to reading the page itself. */
-export class RecipePageError extends Error {}
+export class RecipePageError extends UserError {}
 
 /** A site the household's agents never fetch from, by any means. */
-export class RecipePageRefused extends Error {}
+export class RecipePageRefused extends UserError {}
 
 /** Sites whose robots.txt blocks AI agents such as Claude-User (decision #5), by domain. */
 const EXCLUDED_SITES: Record<string, string> = {
