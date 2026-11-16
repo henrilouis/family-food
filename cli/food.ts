@@ -4,10 +4,11 @@ import { parseArgs } from "node:util";
 import { AhError, ahGateway, parseAmount } from "./adapters/ah/gateway.ts";
 import { BasketInputError, fillBasket, formatReport, planBasket, readBasketInput, writeBasketSection } from "./basket.ts";
 import { AppleNotesError, familyNotes, FOOD_WISHES, RECIPES_TO_ADD, type Deletion } from "./adapters/apple-notes/notes.ts";
-import { buildBundle } from "./build-bundle.ts";
+import { buildBundle, publishedWeekMenusWith } from "./build-bundle.ts";
 import { writeBundleFiles } from "./bundle-files.ts";
 import { checkVault, formatCheck } from "./check.ts";
 import { readConfig, writeConfig } from "./config.ts";
+import { fetchRecipePage, RecipePageError, RecipePageRefused } from "./recipe-page.ts";
 import { DisplayTargetError } from "./adapters/display-target.ts";
 import { deploy, DeployRefused } from "./deploy.ts";
 import { preview } from "./preview.ts";
@@ -54,6 +55,13 @@ Commands:
                         Deleting prints {"deleted", "notFound", "deleteByHand", "error"} with --json.
                         Exit 2 when Notes won't take the change: delete the "deleteByHand" items by hand.
                         (food publish also rewrites the "This week" note; a failure there only warns)
+  recipe fetch <url>    Read the schema.org Recipe on an open recipe site's page (JSON), fetched with
+                        an honest User-Agent. Exit 2: a site food never fetches from (NYT Cooking,
+                        Serious Eats, The Guardian) or Allerhande: ask for the recipe text instead.
+                        Exit 3: no recipe data (fetch failed or none on the page): read the page another way
+  recipe published <name> [--json]
+                        Name the published Week Menus that link Recipe <name> (as a dinner or a side):
+                        if there are any, an edit to it needs \`food publish\`
   deploy                Set up, update or repair the Kitchen Display Pi (ssh host \`kitchen\`)
                         from a clean main that matches origin
 `;
@@ -122,6 +130,8 @@ async function main(args: string[]): Promise<void> {
       return basket(rest);
     case "notes":
       return notes(rest);
+    case "recipe":
+      return recipe(rest);
     default:
       throw new UsageError(usage);
   }
@@ -167,6 +177,40 @@ function formatDeletion(note: string, { deleted, notFound, deleteByHand, error }
     lines.push(...deleteByHand.map((item) => `- ${item.replace(/\n/g, "\n  ")}`));
   }
   return lines.map((line) => line + "\n").join("");
+}
+
+async function recipe(args: string[]): Promise<void> {
+  const [command, ...rest] = args;
+  switch (command) {
+    case "published": {
+      const { values, positionals } = parseArgs({ args: rest, allowPositionals: true, options: { json: { type: "boolean", default: false } } });
+      if (positionals.length !== 1) throw new UsageError(usage);
+      const [name] = positionals;
+      const weekMenus = await publishedWeekMenusWith(await vaultPath(), name, now());
+      if (values.json) process.stdout.write(JSON.stringify({ recipe: name, weekMenus }) + "\n");
+      else if (weekMenus.length === 0) process.stdout.write(`${name} isn't on a published Week Menu: no Publish needed.\n`);
+      else {
+        const menus = weekMenus.length === 1 ? `Week Menu of ${weekMenus[0]}` : `Week Menus of ${weekMenus.join(", ")}`;
+        process.stdout.write(`${name} is on the published ${menus}: run \`food publish\`.\n`);
+      }
+      return;
+    }
+    case "fetch": {
+      if (rest.length !== 1) throw new UsageError(usage);
+      if (!/^https?:$/.test(URL.parse(rest[0])?.protocol ?? "")) throw new UsageError(`Not a web address: "${rest[0]}"`);
+      try {
+        process.stdout.write(JSON.stringify(await fetchRecipePage(rest[0]), null, 2) + "\n");
+      } catch (error) {
+        if (!(error instanceof RecipePageRefused || error instanceof RecipePageError)) throw error;
+        process.stderr.write(error.message + "\n");
+        // 2: never read this page, by any means, so ask for the recipe text. 3: no recipe data, so read the page another way.
+        process.exitCode = error instanceof RecipePageRefused ? 2 : 3;
+      }
+      return;
+    }
+    default:
+      throw new UsageError(usage);
+  }
 }
 
 async function ah(args: string[]): Promise<void> {

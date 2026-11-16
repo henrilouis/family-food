@@ -19,3 +19,10 @@ export async function buildBundle(vault: string, now: Date): Promise<DisplayBund
 export function isPublished(weekStart: string, now: Date): boolean {
   return addDays(weekStart, 6) >= kitchenDate(now);
 }
+
+/** The `week_start` of each Week Menu a Publish at `now` sends that links Recipe `name`, as a dinner or a side. */
+export async function publishedWeekMenusWith(vault: string, name: string, now: Date): Promise<string[]> {
+  return (await readWeekMenus(vault))
+    .filter((week) => isPublished(week.weekStart, now) && week.days.some((day) => day.dinner === name || day.side === name))
+    .map((week) => week.weekStart);
+}

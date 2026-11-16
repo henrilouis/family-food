@@ -50,6 +50,17 @@ food notes recipes-to-add --json               # URLs and pasted recipes in "Rec
 
 `food publish` also rewrites the "This week" note. See `docs/apple-notes.md`, including the checks to do by hand against the real shared folder.
 
+## Adding recipes
+
+Ask the agent to add a recipe (a URL or pasted text), or to import "Recipes to add": the `add-recipe` skill (`.agents/skills/add-recipe/SKILL.md`) writes it to the vault in the template. It replaces the old work vault's copy of that skill. The CLI parts it uses:
+
+```sh
+food recipe fetch https://cookieandkate.com/best-lentil-soup-recipe/   # the page's schema.org Recipe as JSON
+food recipe published "Best Lentil Soup"                                # is it on a published Week Menu?
+```
+
+`food recipe fetch` says who it is (an honest User-Agent) and never fetches from NYT Cooking, Serious Eats or The Guardian, whose robots.txt blocks AI agents; paste those recipes instead. Allerhande pages aren't supported yet. Under tests it fetches only from local test pages.
+
 ## Local config
 
 The local config lives in `~/Library/Application Support/family-food/` (`FOOD_CONFIG_DIR` overrides it). `FOOD_NOW` fixes the CLI's clock. The config's `fakes` key swaps an adapter for its fake, which keeps its state as JSON files in the folder given (`{ "fakes": { "ah": "/tmp/x/ah", "apple-notes": "/tmp/x/notes" } }`); the tests use this.
