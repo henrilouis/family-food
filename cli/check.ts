@@ -3,7 +3,7 @@ import path from "node:path";
 import type { MenuDay } from "../bundle/bundle.ts";
 import { parseAmount } from "./amount.ts";
 import { isPublished } from "./build-bundle.ts";
-import { findRecipeNote, NoteError, parseWeekMenu, readNotes, readWeekMenuNotes, RECIPE_FOLDERS, weekStartOf, type Note } from "./vault.ts";
+import { findRecipeNote, NoteError, parseRecipe, parseWeekMenu, readNotes, readWeekMenuNotes, RECIPE_FOLDERS, weekStartOf, type Note } from "./vault.ts";
 
 /** A format problem in one Recipe Vault note. `file` is relative to the vault, e.g. "Meals/Dahl.md". */
 export type Problem = { file: string; message: string };
@@ -109,16 +109,34 @@ const ITALIC = /(?<!\*)\*(?!\*)([^*\n]+?)\*(?!\*)/g;
 function amountProblems(note: Note): string[] {
   const problems: string[] = [];
   let section: string | null = null;
+  let step: string | null = null;
+  const checkStep = (text: string) => {
+    for (const [, amount] of text.matchAll(ITALIC)) {
+      if (!parseAmount(amount)) problems.push(`step ${step}: the amount "${amount}" doesn't start with a number`);
+    }
+  };
   for (const line of note.body.split("\n")) {
     let m: RegExpMatchArray | null;
-    if ((m = line.match(/^## (.+)/))) section = m[1].trim().toLowerCase();
-    else if (section === "ingredients" && (m = line.match(/^\s*[-*] \*([^*]+)\*/))) {
+    if ((m = line.match(/^## (.+)/))) {
+      section = m[1].trim().toLowerCase();
+      step = null;
+    } else if (section === "ingredients" && (m = line.match(/^\s*[-*] \*([^*]+)\*/))) {
       if (!parseAmount(m[1])) problems.push(`the ingredient amount "${m[1]}" doesn't start with a number`);
-    } else if (section === "method" && (m = line.match(/^\s*(\d+)\.\s+(.*)/))) {
-      for (const [, amount] of m[2].matchAll(ITALIC)) {
-        if (!parseAmount(amount)) problems.push(`step ${m[1]}: the amount "${amount}" doesn't start with a number`);
-      }
+    } else if (section === "method") {
+      if ((m = line.match(/^(\d+)[.)]\s+(.*)/))) {
+        step = m[1];
+        checkStep(m[2]);
+      } else if (step && /^\s+\S/.test(line)) checkStep(line);
+      else step = null;
     }
+  }
+  if (problems.length > 0) return problems;
+  // Whatever else would stop the display bundle from reading this Recipe.
+  try {
+    parseRecipe(path.basename(note.file, ".md"), note);
+  } catch (e) {
+    if (!(e instanceof NoteError)) throw e;
+    problems.push(e.problem);
   }
   return problems;
 }

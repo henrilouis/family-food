@@ -131,7 +131,7 @@ export async function findRecipeNote(vault: string, name: string): Promise<Note 
   return null;
 }
 
-function parseRecipe(name: string, note: Note): Recipe {
+export function parseRecipe(name: string, note: Note): Recipe {
   const source = typeof note.properties.source === "string" && note.properties.source.trim() ? note.properties.source.trim() : null;
   const recipe: Recipe = { title: name, ingredients: [], method: [], notes: [], source };
   const steps: string[] = [];
@@ -173,7 +173,7 @@ function parseRecipe(name: string, note: Note): Recipe {
   recipe.method = steps.map((step) =>
     markStep(plainText(step), vocabulary, (amount) => {
       const parsed = parseAmount(amount);
-      if (!parsed) throw new VaultError(`${note.file}: the amount "${amount}" in the Method step "${step}" doesn't start with a number`);
+      if (!parsed) throw new NoteError(note.file, `the amount "${amount}" in the Method step "${step}" doesn't start with a number`);
       return parsed;
     }),
   );

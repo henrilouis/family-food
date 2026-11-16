@@ -81,6 +81,16 @@ describe("food vault check", () => {
       expect(result.stderr).toBe("");
     });
 
+    test("an italic amount that doesn't parse on a Method step's continuation line", async () => {
+      const { run, vault } = await sandbox();
+      await edit(vault, "Sides/Naan.md", "2. Divide the dough into 8 equal portions.", "2) Divide the dough into 8 equal portions,\n   using *a sharp* knife.");
+
+      const result = await run(["vault", "check"]);
+
+      expect(result.code).toBe(1);
+      expect(result.stdout).toMatch(/error .*Sides\/Naan\.md: .*"a sharp"/);
+    });
+
     test("italics in the notes after the Method are not amounts", async () => {
       const { run, vault } = await sandbox();
 
