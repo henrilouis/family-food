@@ -317,7 +317,229 @@
             }
           ]
         }
-      ]
+      ],
+      "method": [
+        [
+          "Rinse ",
+          {
+            "amount": {
+              "text": "300g",
+              "quantity": 300,
+              "unit": "g"
+            },
+            "ingredient": "red split lentils"
+          },
+          " under running water and drain well. Heat ",
+          {
+            "amount": {
+              "text": "1 tbsp",
+              "quantity": 1,
+              "unit": "tbsp"
+            },
+            "ingredient": "sunflower oil"
+          },
+          " in a pan over medium-high heat and fry ",
+          {
+            "amount": {
+              "text": "1 large",
+              "quantity": 1,
+              "unit": "large"
+            },
+            "ingredient": "onion"
+          },
+          " for 3–4 minutes. Add ",
+          {
+            "amount": {
+              "text": "2 tsp",
+              "quantity": 2,
+              "unit": "tsp"
+            },
+            "ingredient": "garam masala"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "2 tsp",
+              "quantity": 2,
+              "unit": "tsp"
+            },
+            "ingredient": "curry powder"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "1 tsp",
+              "quantity": 1,
+              "unit": "tsp"
+            },
+            "ingredient": "paprika"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "1 tsp",
+              "quantity": 1,
+              "unit": "tsp"
+            },
+            "ingredient": "cumin"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "1 tsp",
+              "quantity": 1,
+              "unit": "tsp"
+            },
+            "ingredient": "cardamom"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "1",
+              "quantity": 1,
+              "unit": ""
+            },
+            "ingredient": "cinnamon stick"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "4cm",
+              "quantity": 4,
+              "unit": "cm"
+            },
+            "ingredient": "ginger"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "2",
+              "quantity": 2,
+              "unit": ""
+            },
+            "ingredient": "garlic cloves"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "1",
+              "quantity": 1,
+              "unit": ""
+            },
+            "ingredient": "red pepper"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "1",
+              "quantity": 1,
+              "unit": ""
+            },
+            "ingredient": "green pepper"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "1",
+              "quantity": 1,
+              "unit": ""
+            },
+            "ingredient": "carrot"
+          },
+          " and ",
+          {
+            "amount": {
+              "text": "2",
+              "quantity": 2,
+              "unit": ""
+            },
+            "ingredient": "tomatoes"
+          },
+          " and fry for 1 minute. Add the lentils and deglaze with ",
+          {
+            "amount": {
+              "text": "500ml",
+              "quantity": 500,
+              "unit": "ml"
+            },
+            "ingredient": "vegetable stock"
+          },
+          ". Bring to a boil and simmer on low heat for 15–20 minutes until the lentils are cooked."
+        ],
+        [
+          "Heat ",
+          {
+            "amount": {
+              "text": "4 tbsp",
+              "quantity": 4,
+              "unit": "tbsp"
+            },
+            "ingredient": "sunflower oil"
+          },
+          " in a small frying pan and fry ",
+          {
+            "amount": {
+              "text": "10",
+              "quantity": 10,
+              "unit": ""
+            },
+            "ingredient": "lime leaves"
+          },
+          " and ",
+          {
+            "amount": {
+              "text": "1 tsp",
+              "quantity": 1,
+              "unit": "tsp"
+            },
+            "ingredient": "mustard seeds"
+          },
+          " for 1 minute. Remove from heat and set aside. Warm ",
+          {
+            "amount": {
+              "text": "1",
+              "quantity": 1,
+              "unit": ""
+            },
+            "ingredient": "naan"
+          },
+          " according to package instructions."
+        ],
+        [
+          "Add ",
+          {
+            "amount": {
+              "text": "250ml",
+              "quantity": 250,
+              "unit": "ml"
+            },
+            "ingredient": "coconut milk"
+          },
+          " to the lentils and heat briefly. Stir in ",
+          {
+            "amount": {
+              "text": "400g",
+              "quantity": 400,
+              "unit": "g"
+            },
+            "ingredient": "spinach"
+          },
+          " in batches and let it wilt. Season with salt and pepper. Garnish the dahl with ",
+          {
+            "amount": {
+              "text": "4 tbsp",
+              "quantity": 4,
+              "unit": "tbsp"
+            },
+            "ingredient": "yoghurt"
+          },
+          ", fresh herbs and the spiced oil with mustard seeds and lime leaves. Serve with the naan."
+        ]
+      ],
+      "notes": [
+        "Variations: you can vary endlessly by using different vegetables or spices. Replace the spinach with roughly chopped kale or cavolo nero for more bite. Also try brown lentils or yellow split peas instead of dried red split lentils for a different flavour."
+      ],
+      "source": null
     },
     "Naan": {
       "title": "Naan",
@@ -395,7 +617,95 @@
             }
           ]
         }
-      ]
+      ],
+      "method": [
+        [
+          "In a small bowl, stir ",
+          {
+            "amount": {
+              "text": "1 tsp",
+              "quantity": 1,
+              "unit": "tsp"
+            },
+            "ingredient": "sugar"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "120ml",
+              "quantity": 120,
+              "unit": "ml"
+            },
+            "ingredient": "warm water"
+          },
+          " and ",
+          {
+            "amount": {
+              "text": "7g",
+              "quantity": 7,
+              "unit": "g"
+            },
+            "ingredient": "yeast"
+          },
+          " together. The yeast should be activated when it becomes foamy, about 10 minutes. Put ",
+          {
+            "amount": {
+              "text": "270g",
+              "quantity": 270,
+              "unit": "g"
+            },
+            "ingredient": "flour"
+          },
+          " on a flat surface and make a well in the middle. Add the yeast mixture, ",
+          {
+            "amount": {
+              "text": "125g",
+              "quantity": 125,
+              "unit": "g"
+            },
+            "ingredient": "yoghurt"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "1/2 tsp",
+              "quantity": 0.5,
+              "unit": "tsp"
+            },
+            "ingredient": "salt"
+          },
+          " and ",
+          {
+            "amount": {
+              "text": "1 tbsp",
+              "quantity": 1,
+              "unit": "tbsp"
+            },
+            "ingredient": "oil"
+          },
+          ", and knead the dough until the surface becomes smooth and shiny, about 10 minutes. Cover the dough and let it rise in a warm place (for example beside the stovetop or a warm oven) until doubled in size, about 1 hour."
+        ],
+        [
+          "Divide the dough into 8 equal portions. Roll each into an 8\" circle with a rolling pin."
+        ],
+        [
+          "Heat a skillet (cast-iron preferred) over high heat and lightly grease it with oil so the dough doesn't stick. Place a dough circle on the skillet. When it puffs up and bubbles and burnt spots appear, flip it over and cook the other side. Repeat until all the dough is done."
+        ],
+        [
+          "Brush the naan with ",
+          {
+            "amount": {
+              "text": "3 tbsp",
+              "quantity": 3,
+              "unit": "tbsp"
+            },
+            "ingredient": "melted butter"
+          },
+          " and serve warm."
+        ]
+      ],
+      "notes": [],
+      "source": null
     },
     "Vegetable Biryani": {
       "title": "Vegetable Biryani",
@@ -653,7 +963,347 @@
             }
           ]
         }
-      ]
+      ],
+      "method": [
+        [
+          "Warm ",
+          {
+            "amount": {
+              "text": "60 ml",
+              "quantity": 60,
+              "unit": "ml"
+            },
+            "ingredient": "milk"
+          },
+          " until steaming. Grind half of ",
+          {
+            "amount": {
+              "text": "20 strands",
+              "quantity": 20,
+              "unit": "strands"
+            },
+            "ingredient": "saffron"
+          },
+          ", add all the saffron to the milk, cover and steep."
+        ],
+        [
+          "Rinse ",
+          {
+            "amount": {
+              "text": "400 g",
+              "quantity": 400,
+              "unit": "g"
+            },
+            "ingredient": "basmati rice"
+          },
+          " until the water runs clear. Soak it in cold water for 30–60 minutes, then drain well."
+        ],
+        [
+          "Heat ",
+          {
+            "amount": {
+              "text": "60 ml",
+              "quantity": 60,
+              "unit": "ml"
+            },
+            "ingredient": "ghee"
+          },
+          " in a Dutch oven. Fry ",
+          {
+            "amount": {
+              "text": "2 large",
+              "quantity": 2,
+              "unit": "large"
+            },
+            "ingredient": "onions"
+          },
+          " with a pinch of salt until deep golden, 15–20 minutes. Reserve half; cook ",
+          {
+            "amount": {
+              "text": "125 g",
+              "quantity": 125,
+              "unit": "g"
+            },
+            "ingredient": "dried apricots"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "70 g",
+              "quantity": 70,
+              "unit": "g"
+            },
+            "ingredient": "cashews"
+          },
+          " and ",
+          {
+            "amount": {
+              "text": "35 g",
+              "quantity": 35,
+              "unit": "g"
+            },
+            "ingredient": "raisins"
+          },
+          " with the remaining onions for 2 minutes, then reserve as garnish."
+        ],
+        [
+          "Return the first reserved onions to the pot. Add ",
+          {
+            "amount": {
+              "text": "10 cloves",
+              "quantity": 10,
+              "unit": "cloves"
+            },
+            "ingredient": "garlic"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "50 g",
+              "quantity": 50,
+              "unit": "g"
+            },
+            "ingredient": "ginger"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "1",
+              "quantity": 1,
+              "unit": ""
+            },
+            "ingredient": "green chile"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "1½ tsp",
+              "quantity": 1.5,
+              "unit": "tsp"
+            },
+            "ingredient": "garam masala"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "1",
+              "quantity": 1,
+              "unit": ""
+            },
+            "ingredient": "star anise"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "1 tsp",
+              "quantity": 1,
+              "unit": "tsp"
+            },
+            "ingredient": "caraway"
+          },
+          " and ",
+          {
+            "amount": {
+              "text": "½ tsp",
+              "quantity": 0.5,
+              "unit": "tsp"
+            },
+            "ingredient": "turmeric"
+          },
+          "; cook until fragrant. Add ",
+          {
+            "amount": {
+              "text": "120 g",
+              "quantity": 120,
+              "unit": "g"
+            },
+            "ingredient": "yogurt"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "1 small",
+              "quantity": 1,
+              "unit": "small"
+            },
+            "ingredient": "cauliflower"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "1",
+              "quantity": 1,
+              "unit": ""
+            },
+            "ingredient": "potato"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "1 medium",
+              "quantity": 1,
+              "unit": "medium"
+            },
+            "ingredient": "carrot"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "240 ml",
+              "quantity": 240,
+              "unit": "ml"
+            },
+            "ingredient": "water"
+          },
+          " and ",
+          {
+            "amount": {
+              "text": "1 tsp",
+              "quantity": 1,
+              "unit": "tsp"
+            },
+            "ingredient": "salt"
+          },
+          ". Simmer covered until the vegetables are tender, about 20 minutes; add ",
+          {
+            "amount": {
+              "text": "60 g",
+              "quantity": 60,
+              "unit": "g"
+            },
+            "ingredient": "peas"
+          },
+          " and cook 5 minutes. Fold in ",
+          {
+            "amount": {
+              "text": "250 ml",
+              "quantity": 250,
+              "unit": "ml"
+            },
+            "ingredient": "cilantro"
+          },
+          " and ",
+          {
+            "amount": {
+              "text": "250 ml",
+              "quantity": 250,
+              "unit": "ml"
+            },
+            "ingredient": "mint"
+          },
+          " and transfer the vegetables to a bowl."
+        ],
+        [
+          "Boil the rice with ",
+          {
+            "amount": {
+              "text": "960 ml",
+              "quantity": 960,
+              "unit": "ml"
+            },
+            "ingredient": "water"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "60 ml",
+              "quantity": 60,
+              "unit": "ml"
+            },
+            "ingredient": "lemon juice"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "1½ tsp",
+              "quantity": 1.5,
+              "unit": "tsp"
+            },
+            "ingredient": "salt"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "3",
+              "quantity": 3,
+              "unit": ""
+            },
+            "ingredient": "cardamom pods"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "1 stick",
+              "quantity": 1,
+              "unit": "stick"
+            },
+            "ingredient": "cinnamon"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "4",
+              "quantity": 4,
+              "unit": ""
+            },
+            "ingredient": "cloves"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "2 large",
+              "quantity": 2,
+              "unit": "large"
+            },
+            "ingredient": "bay leaves"
+          },
+          " and ",
+          {
+            "amount": {
+              "text": "5 ml",
+              "quantity": 5,
+              "unit": "ml"
+            },
+            "ingredient": "ghee"
+          },
+          " for 2 minutes. Drain; it should be only partly cooked."
+        ],
+        [
+          "Grease the Dutch oven with the remaining ",
+          {
+            "amount": {
+              "text": "5 ml",
+              "quantity": 5,
+              "unit": "ml"
+            },
+            "ingredient": "ghee"
+          },
+          ". Layer in half the rice, the vegetables and their liquid, then the rest of the rice. Sprinkle with the saffron milk, ",
+          {
+            "amount": {
+              "text": "10 ml",
+              "quantity": 10,
+              "unit": "ml"
+            },
+            "ingredient": "rosewater"
+          },
+          ", ",
+          {
+            "amount": {
+              "text": "10 ml",
+              "quantity": 10,
+              "unit": "ml"
+            },
+            "ingredient": "pandan water"
+          },
+          " and the reserved onion-fruit-cashew garnish."
+        ],
+        [
+          "Seal tightly with foil and a lid. Cook over medium-low heat for 15 minutes, then rest 5 minutes. If liquid remains at the bottom, reseal and cook 5–10 minutes longer. Fluff gently with a fork and serve."
+        ]
+      ],
+      "notes": [],
+      "source": "https://www.seriouseats.com/vegetable-biryani-5324853"
     }
   }
 }

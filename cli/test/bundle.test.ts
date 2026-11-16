@@ -1,7 +1,11 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
+import type { Step } from "../../bundle/bundle.ts";
 import { sandbox } from "./harness.ts";
+
+/** A Method step with each marked span in brackets: "Rinse [300g red split lentils] under …". */
+const marked = (step: Step) => step.map((part) => (typeof part === "string" ? part : `[${[part.amount.text, part.ingredient].filter(Boolean).join(" ")}]`)).join("");
 
 describe("food bundle", () => {
   test("produces the sample bundle that the Kitchen Display page tests use", async () => {
@@ -128,5 +132,114 @@ describe("food bundle", () => {
     const naan = recipes["Naan"].ingredients[0].items;
     expect(naan[5]).toEqual({ amount: { text: "1/2 tsp", quantity: 0.5, unit: "tsp" }, text: "salt" });
     expect(naan[7]).toEqual({ amount: null, text: "Some oil, for greasing the skillet" });
+  });
+
+  test("gives each Recipe its Method steps, marking each amount and the ingredient words after it", async () => {
+    const { bundle } = await sandbox();
+
+    const { recipes } = await bundle("2026-11-21T10:00");
+
+    const dahl = recipes["Dahl"].method.map(marked);
+    expect(dahl).toHaveLength(3);
+    expect(dahl[1]).toBe(
+      "Heat [4 tbsp sunflower oil] in a small frying pan and fry [10 lime leaves] and [1 tsp mustard seeds] for 1 minute. " +
+        "Remove from heat and set aside. Warm [1 naan] according to package instructions.",
+    );
+    expect(dahl[0]).toMatch(/^Rinse \[300g red split lentils\] under running water and drain well\. Heat \[1 tbsp sunflower oil\] in a pan/);
+    expect(dahl[0]).toContain("fry [1 large onion] for 3–4 minutes. Add [2 tsp garam masala], [2 tsp curry powder], [1 tsp paprika],");
+    expect(dahl[0]).toContain("[2 garlic cloves], [1 red pepper], [1 green pepper], [1 carrot] and [2 tomatoes] and fry");
+  });
+
+  test("marks the steps of every sample Recipe and Side", async () => {
+    const { bundle } = await sandbox();
+
+    const { recipes } = await bundle("2026-11-21T10:00");
+
+    const biryani = recipes["Vegetable Biryani"].method.map(marked);
+    expect(biryani).toHaveLength(7);
+    expect(biryani[0]).toBe("Warm [60 ml milk] until steaming. Grind half of [20 strands saffron], add all the saffron to the milk, cover and steep.");
+    expect(biryani[4]).toBe(
+      "Boil the rice with [960 ml water], [60 ml lemon juice], [1½ tsp salt], [3 cardamom pods], [1 stick cinnamon], [4 cloves], " +
+        "[2 large bay leaves] and [5 ml ghee] for 2 minutes. Drain; it should be only partly cooked.",
+    );
+    const naan = recipes["Naan"].method.map(marked);
+    expect(naan).toHaveLength(4);
+    expect(naan[0]).toMatch(/^In a small bowl, stir \[1 tsp sugar\], \[120ml warm water\] and \[7g yeast\] together\./);
+    expect(naan[0]).toContain("Put [270g flour] on a flat surface");
+    expect(naan[0]).toContain("Add the yeast mixture, [125g yoghurt], [1/2 tsp salt] and [1 tbsp oil], and knead");
+    expect(naan[1]).toBe('Divide the dough into 8 equal portions. Roll each into an 8" circle with a rolling pin.');
+    expect(naan[3]).toBe("Brush the naan with [3 tbsp melted butter] and serve warm.");
+  });
+
+  test("keeps the amounts in a step as numbers and units, for doubling", async () => {
+    const { bundle } = await sandbox();
+
+    const { recipes } = await bundle("2026-11-21T10:00");
+
+    expect(recipes["Vegetable Biryani"].method[3].filter((part) => typeof part !== "string").slice(3, 5)).toEqual([
+      { amount: { text: "1½ tsp", quantity: 1.5, unit: "tsp" }, ingredient: "garam masala" },
+      { amount: { text: "1", quantity: 1, unit: "" }, ingredient: "star anise" },
+    ]);
+  });
+
+  test("ends an ingredient span at a joining word or a word the ingredient list doesn't have", async () => {
+    const { bundle, vault } = await sandbox();
+    await writeFile(
+      path.join(vault, "Sides/Lime rice.md"),
+      [
+        "# Lime rice",
+        "",
+        "## Ingredients",
+        "",
+        "- *200 g* basmati rice, rinsed in cold water",
+        "- *1* lime, zest and juice",
+        "- *1 tsp* salt, for the water",
+        "- *2* spring onions",
+        "",
+        "## Method",
+        "",
+        "1. Boil *200 g* basmati rice in water with *1 tsp* salt for the pan, 12 minutes.",
+        "2. Stir in the zest of *1* lime and the juice, then *2* spring onion sliced thin",
+        "   and serve.",
+        "",
+      ].join("\n"),
+    );
+    const menu = path.join(vault, "Week menus/Week 2026-11-21.md");
+    await writeFile(menu, (await readFile(menu, "utf8")).replace("| [[Naan]] |", "| [[Lime rice]] |"));
+
+    const { recipes } = await bundle("2026-11-21T10:00");
+
+    expect(recipes["Lime rice"].method.map(marked)).toEqual([
+      "Boil [200 g basmati rice] in water with [1 tsp salt] for the pan, 12 minutes.",
+      "Stir in the zest of [1 lime] and the juice, then [2 spring onion] sliced thin and serve.",
+    ]);
+  });
+
+  test("gives each Recipe its notes and source", async () => {
+    const { bundle } = await sandbox();
+
+    const { recipes } = await bundle("2026-11-21T10:00");
+
+    expect(recipes["Dahl"].notes).toEqual([
+      "Variations: you can vary endlessly by using different vegetables or spices. Replace the spinach with roughly chopped kale " +
+        "or cavolo nero for more bite. Also try brown lentils or yellow split peas instead of dried red split lentils for a different flavour.",
+    ]);
+    expect(recipes["Dahl"].source).toBeNull();
+    expect(recipes["Vegetable Biryani"].notes).toEqual([]);
+    expect(recipes["Vegetable Biryani"].source).toBe("https://www.seriouseats.com/vegetable-biryani-5324853");
+    expect(recipes["Naan"].source).toBeNull();
+  });
+
+  test("names the Recipe and the step when a step's italic amount doesn't start with a number", async () => {
+    const { run, vault } = await sandbox();
+    const dahl = path.join(vault, "Meals/Dahl.md");
+    await writeFile(dahl, (await readFile(dahl, "utf8")).replace("*400g* spinach", "*a handful of* spinach"));
+
+    const result = await run(["bundle"], { now: "2026-11-21T10:00" });
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("Dahl.md");
+    expect(result.stderr).toContain(`"a handful of"`);
+    expect(result.stderr).not.toContain("    at ");
   });
 });
