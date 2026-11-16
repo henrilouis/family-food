@@ -48,6 +48,28 @@ describe("food bundle", () => {
     ]);
   });
 
+  test("includes next week's Week Menu, with its markers, once it is Locked", async () => {
+    const { bundle, vault } = await sandbox();
+    const thisWeek = await readFile(path.join(vault, "Week menus/Week 2026-11-21.md"), "utf8");
+    const nextWeek = thisWeek
+      .replace("week_start: 2026-11-21", "week_start: 2026-11-28")
+      .replace(/\| (Sat|Sun|Mon|Tue|Wed|Thu|Fri) \d+ Nov/g, "| $1");
+    await writeFile(path.join(vault, "Week menus/Week 2026-11-28.md"), nextWeek);
+
+    const { weekMenus } = await bundle("2026-11-26T18:00");
+
+    expect(weekMenus.map((w) => w.weekStart)).toEqual(["2026-11-21", "2026-11-28"]);
+    expect(weekMenus[1].days.map((d) => [d.date, d.novel, d.double])).toEqual([
+      ["2026-11-28", false, null],
+      ["2026-11-29", true, null],
+      ["2026-11-30", false, "cook"],
+      ["2026-12-01", false, "second"],
+      ["2026-12-02", false, "cook"],
+      ["2026-12-03", false, "second"],
+      ["2026-12-04", false, null],
+    ]);
+  });
+
   test("keeps last week's Week Menu until 03:00 on Saturday, when the Kitchen Display moves to the new week", async () => {
     const { bundle } = await sandbox();
 

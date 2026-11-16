@@ -3,6 +3,18 @@
 
 export const BUNDLE_SCHEMA_VERSION = 1;
 
+/** The file names the page fetches, side by side in one folder (a release on the Pi). */
+export const BUNDLE_FILE = "bundle.json";
+export const VERSION_FILE = "version.json";
+
+/**
+ * The version file: a hash of the bundle's content, publish time left out, so a Publish that
+ * changes nothing leaves it the same and the page doesn't reload. The page polls this small file.
+ */
+export type BundleVersion = {
+  hash: string;
+};
+
 export type DisplayBundle = {
   schemaVersion: typeof BUNDLE_SCHEMA_VERSION;
   /** When the bundle was built, as an ISO timestamp. */

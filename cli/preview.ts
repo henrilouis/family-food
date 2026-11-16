@@ -2,19 +2,25 @@ import http from "node:http";
 import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { BUNDLE_FILE, VERSION_FILE } from "../bundle/bundle.ts";
 import { buildBundle } from "./build-bundle.ts";
+import { bundleVersion } from "./bundle-files.ts";
 import { buildPageScript, displayDir as display } from "./page.ts";
 
 type Options = { vault: string; port: number; lan: boolean; now: () => Date };
 type Route = { contentType: string; body: () => Promise<string> };
 
-/** Serves the Kitchen Display page and a bundle freshly built from the Recipe Vault on every request. */
+/** Serves the Kitchen Display page and a bundle (and its version file) freshly built from the Recipe Vault on every request. */
 export function preview({ vault, port, lan, now }: Options): void {
   const routes: Record<string, Route> = {
     "/": { contentType: "text/html; charset=utf-8", body: () => readFile(path.join(display, "index.html"), "utf8") },
     "/style.css": { contentType: "text/css; charset=utf-8", body: () => readFile(path.join(display, "style.css"), "utf8") },
     "/page.js": { contentType: "text/javascript; charset=utf-8", body: buildPageScript },
-    "/bundle.json": { contentType: "application/json; charset=utf-8", body: async () => JSON.stringify(await buildBundle(vault, now())) },
+    [`/${BUNDLE_FILE}`]: { contentType: "application/json; charset=utf-8", body: async () => JSON.stringify(await buildBundle(vault, now())) },
+    [`/${VERSION_FILE}`]: {
+      contentType: "application/json; charset=utf-8",
+      body: async () => JSON.stringify(bundleVersion(await buildBundle(vault, now()))),
+    },
   };
 
   const server = http.createServer(async (req, res) => {
