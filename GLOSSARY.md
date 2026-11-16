@@ -15,13 +15,13 @@ The family's collection of recipes kept as notes in Obsidian; the canonical home
 _Avoid_: Recipe database, cookbook
 
 **Novel Recipe**:
-A vegetarian recipe from outside the Recipe Vault (typically a recipe website), introduced to try something new.
+A vegetarian recipe new to the family (typically from a recipe website), introduced to try something new. It stays Novel, even once saved in the Recipe Vault, until its first cooking is judged: kept if liked, removed from the Recipe Vault if not.
 _Avoid_: New recipe, experiment
 
 ### Planning
 
 **Week Menu**:
-The plan of dinners for one week, running Saturday (delivery day) to Friday: six Menu Days plus one Free Day.
+The plan of dinners for one week, running Saturday (delivery day) to Friday: six Menu Days plus one Free Day. Past Week Menus are the family's record of what was eaten and whether each Novel Recipe was kept.
 _Avoid_: Meal plan, week plan
 
 **Menu Day**:
@@ -34,18 +34,49 @@ The one day of the week whose dinner is deliberately not planned (eating out, ta
 A Recipe cooked once in a quantity that covers two consecutive Menu Days: the day it is cooked and the next.
 _Avoid_: Leftovers, batch cooking
 
+**Household Preferences**:
+The family's standing food rules: ingredients never to plan, ingredients to plan less, and rules for the children. Always read when planning; may be empty.
+_Avoid_: Kid rules, dislikes list
+
+**Wish**:
+A request from either adult for an upcoming Week Menu: a Recipe from the Recipe Vault, an idea for the Novel Recipe, or a constraint such as "easy week". A Wish is gone once a Week Menu honours it.
+_Avoid_: Request, suggestion
+
+**Planning Session**:
+The weekly conversation in which an adult and the agent produce the next Week Menu; it ends when that Week Menu is Locked.
+_Avoid_: Planning run, menu chat
+
+**Locked**:
+Said of a Week Menu that has been agreed and saved. Only a Locked Week Menu fills a Basket.
+_Avoid_: Final, confirmed
+
 ### Ordering
 
 **Staple**:
-A grocery item bought regularly regardless of the Week Menu, such as Greek yoghurt, milk, cheese and bread toppings.
+A food or drink item bought regularly regardless of the Week Menu (breakfast, lunch, snacks, the children's food), such as Greek yoghurt, milk, cheese and bread toppings. Each Staple is either a **Weekly Staple** (in every Basket) or an **Ask Staple** (asked about at each Planning Session). Household non-food is not a Staple.
 _Avoid_: Regulars, basics
 
 **Basket**:
 The not-yet-placed Albert Heijn order, filled from the Week Menu and Staples and checked out by a human.
 _Avoid_: Cart, order (before checkout)
 
+**Pinned Product**:
+The Albert Heijn product remembered for a recipe ingredient or a Staple, bought without asking again.
+_Avoid_: Mapping, match
+
+**Cupboard Ingredient**:
+A long-life recipe ingredient (tins, dried legumes, rice, less common spices) that the household is asked about each time a Basket is filled, because it may already be in the house. Unlike an Ask Staple, it is needed for a dinner.
+_Avoid_: Pantry item
+
+**Always in House**:
+Said of a recipe ingredient that is never bought or asked about (salt, oil, everyday spices) until someone says it is running low.
+
 ### Kitchen
 
 **Kitchen Display**:
 The e-ink device in the kitchen that shows the Week Menu and the Recipe being cooked.
 _Avoid_: Boox, tablet, reader
+
+**Publish**:
+To send the current and upcoming Week Menus, with their Recipes, to everything that shows them: the Kitchen Display and the shared "This week" note. Edits reach those places only when they are published.
+_Avoid_: Sync, push, deploy

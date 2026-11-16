@@ -2,7 +2,7 @@
 
 ### Issue tracker
 
-Issues are tracked in GitHub Issues on henrilouis/food-automation (via `gh`). See `docs/agents/issue-tracker.md`.
+Issues are tracked in GitHub Issues on henrilouis/family-food (via `gh`). See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
