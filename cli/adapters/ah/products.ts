@@ -12,6 +12,8 @@ export type Product = {
   unitPrice: { amount: number; per: "kg" | "l" | "piece" } | null;
   /** The Bonus offer, e.g. "1 + 1 gratis", when the product is on Bonus. */
   bonus: string | null;
+  /** Bought by the household before; only known when logged in. */
+  previouslyBought: boolean;
 };
 
 type Dimension = "mass" | "volume" | "count";
@@ -70,6 +72,7 @@ function toProduct({ product, pack, unitCents }: Candidate): Product {
     price: currentCents(product) / 100,
     unitPrice: pack && unitCents !== null ? { amount: unitCents / 100, per: perUnit[pack.dimension][0] } : null,
     bonus: product.isBonus ? (product.bonusMechanism ?? null) : null,
+    previouslyBought: product.isPreviouslyBought ?? false,
   };
 }
 
@@ -110,4 +113,11 @@ export function rankProducts(results: AhProduct[], need?: Amount): Product[] {
     (a, b) => a.unitCents! - b.unitCents! || Number(isHouseBrand(b.product)) - Number(isHouseBrand(a.product)),
   );
   return [...comparable, ...others].map(toProduct);
+}
+
+/** Keeps the previously bought products that can be ordered, in AH's order. */
+export function previouslyBought(results: AhProduct[]): Product[] {
+  return results
+    .filter((p) => p.isPreviouslyBought && p.isOrderable && !p.isSponsored)
+    .map((p) => toProduct(candidate(p)));
 }

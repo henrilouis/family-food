@@ -1,4 +1,4 @@
-import { writeFile } from "node:fs/promises";
+import { stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
 import { sandbox } from "./harness.ts";
@@ -19,10 +19,12 @@ type AhProduct = {
 
 const product = (p: AhProduct) => ({ isBonus: false, isOrderable: true, isSponsored: false, ...p });
 
-async function fakeAh(catalogue: AhProduct[]) {
+/** A sandbox whose AH is the fake, holding `catalogue`; `bought` are webshop ids, most frequently bought first. */
+async function fakeAh(catalogue: AhProduct[], bought: number[] = []) {
   const box = await sandbox();
   const state = await box.fake("ah");
   await writeFile(path.join(state, "products.json"), JSON.stringify(catalogue.map(product), null, 2));
+  await writeFile(path.join(state, "previously-bought.json"), JSON.stringify(bought));
   return { ...box, state };
 }
 
@@ -130,6 +132,24 @@ describe("food ah search", () => {
     expect(JSON.parse(small.stdout).map((p: { id: number }) => p.id)).toEqual([2]);
   });
 
+  test("searches anonymously until someone logs in, then marks what the household bought before", async () => {
+    const { run } = await fakeAh(
+      [
+        { webshopId: 1, title: "AH Griekse yoghurt", brand: "AH", salesUnitSize: "1 kg", priceBeforeBonus: 3.49 },
+        { webshopId: 2, title: "Fage Griekse yoghurt", brand: "Fage", salesUnitSize: "500 g", priceBeforeBonus: 3.19 },
+      ],
+      [2],
+    );
+
+    const anonymous = await run(["ah", "search", "griekse yoghurt"]);
+    await run(["ah", "login"]);
+    const loggedIn = await run(["ah", "search", "griekse yoghurt"]);
+
+    const bought = (stdout: string) => JSON.parse(stdout).map((p: { id: number; previouslyBought: boolean }) => [p.id, p.previouslyBought]);
+    expect(bought(anonymous.stdout)).toEqual([[1, false], [2, false]]);
+    expect(bought(loggedIn.stdout)).toEqual([[1, false], [2, true]]);
+  });
+
   test("explains --need when it can't read the amount", async () => {
     const { run } = await fakeAh([]);
 
@@ -137,5 +157,75 @@ describe("food ah search", () => {
 
     expect(result.code).toBe(1);
     expect(result.stderr).toContain("--need");
+  });
+});
+
+describe("food ah login", () => {
+  test("keeps the AH token next to the local config, readable only by this user", async () => {
+    const { run, configDir } = await fakeAh([]);
+
+    const result = await run(["ah", "login"]);
+
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("Logged in to AH");
+    const token = await stat(path.join(configDir, "ah-token.json"));
+    expect(token.mode & 0o777).toBe(0o600);
+  });
+});
+
+describe("food ah bought", () => {
+  test("lists the household's previously bought products that match, most frequently bought first", async () => {
+    const { run } = await fakeAh(
+      [
+        { webshopId: 1, title: "AH Halfvolle melk", brand: "AH", salesUnitSize: "1 l", priceBeforeBonus: 1.15 },
+        { webshopId: 2, title: "AH Biologisch Halfvolle melk", brand: "AH Biologisch", salesUnitSize: "1 l", priceBeforeBonus: 1.59 },
+        { webshopId: 3, title: "Campina Halfvolle melk", brand: "Campina", salesUnitSize: "1,5 l", priceBeforeBonus: 1.99 },
+        { webshopId: 4, title: "AH Halfvolle melk lang houdbaar", brand: "AH", salesUnitSize: "1 l", priceBeforeBonus: 1.09, isOrderable: false },
+        { webshopId: 5, title: "AH Volle yoghurt", brand: "AH", salesUnitSize: "1 l", priceBeforeBonus: 1.39 },
+      ],
+      [5, 2, 4, 1],
+    );
+    await run(["ah", "login"]);
+
+    const result = await run(["ah", "bought", "halfvolle melk"]);
+
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual([
+      expect.objectContaining({ id: 2, title: "AH Biologisch Halfvolle melk", price: 1.59, unitPrice: { amount: 1.59, per: "l" }, previouslyBought: true }),
+      expect.objectContaining({ id: 1, title: "AH Halfvolle melk", price: 1.15, previouslyBought: true }),
+    ]);
+  });
+
+  test("asks to log in first", async () => {
+    const { run } = await fakeAh([]);
+
+    const result = await run(["ah", "bought", "melk"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("food ah login");
+  });
+});
+
+describe("food ah refresh", () => {
+  test("renews the AH login", async () => {
+    const { run } = await fakeAh([]);
+    await run(["ah", "login"]);
+
+    const result = await run(["ah", "refresh"]);
+
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("AH login renewed");
+  });
+
+  test("asks to log in first", async () => {
+    const { run } = await fakeAh([]);
+
+    const result = await run(["ah", "refresh"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("food ah login");
   });
 });

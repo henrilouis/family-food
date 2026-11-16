@@ -16,9 +16,12 @@ Commands:
   preview [--port <n>] [--lan]
                         Serve the Kitchen Display page and a fresh bundle on this Mac
                         (port 8787 by default; --lan to open it on other devices too)
+  ah login              Log in to Albert Heijn in your browser (once; the token stays on this Mac)
+  ah refresh            Renew the AH login now (says so when you need to log in again)
   ah search <query> [--need <amount>]
                         Search AH products, cleaned up and cheapest per kg, l or piece first (JSON);
                         --need (e.g. 400g, 1.5l, 3 for pieces) drops packs that would waste too much
+  ah bought <query>     Search the products the household bought before, most often bought first (JSON)
 `;
 
 class UsageError extends Error {}
@@ -71,6 +74,14 @@ async function ah(args: string[]): Promise<void> {
   const gateway = ahGateway(await readConfig());
   const print = (value: unknown) => process.stdout.write(JSON.stringify(value, null, 2) + "\n");
   switch (command) {
+    case "login":
+      await gateway.login();
+      process.stdout.write("Logged in to AH.\n");
+      return;
+    case "refresh":
+      await gateway.refreshLogin();
+      process.stdout.write("AH login renewed.\n");
+      return;
     case "search": {
       const { values, positionals } = parseArgs({
         args: rest,
@@ -83,6 +94,11 @@ async function ah(args: string[]): Promise<void> {
         throw new UsageError(`--need must be an amount such as 400g, 1.5l or 3 (pieces), not "${values.need}"`);
       }
       print(await gateway.searchProducts(positionals.join(" "), { need }));
+      return;
+    }
+    case "bought": {
+      if (rest.length === 0) throw new UsageError(usage);
+      print(await gateway.searchPreviouslyBought(rest.join(" ")));
       return;
     }
     default:
