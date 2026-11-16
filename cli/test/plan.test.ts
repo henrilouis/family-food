@@ -167,6 +167,114 @@ describe("food plan verdict", () => {
   });
 });
 
+describe("food plan write", () => {
+  type Day = { dinner: string | null; side?: string; novel?: boolean; double?: string };
+  const plan: { weekStart: string; novelSource: string; days: Day[]; staples: string[]; notes: string[] } = {
+    weekStart: "2026-11-28",
+    novelSource: "https://example.com/shakshuka",
+    days: [
+      { dinner: "Vegetable Biryani" },
+      { dinner: "Shakshuka", novel: true },
+      { dinner: "Dahl", side: "Naan", double: "cook" },
+      { dinner: "Dahl", double: "second" },
+      { dinner: "Dahl", side: "Naan", double: "cook" },
+      { dinner: "Dahl", double: "second" },
+      { dinner: null },
+    ],
+    staples: ["Skip: milk ×1", "Ask Staples: peanut butter, oats ×2"],
+    notes: ["Bent repeat window for Dahl (Wish)."],
+  };
+  const writePlan = async (dir: string, value: unknown) => {
+    const file = path.join(dir, "plan.json");
+    await writeFile(file, JSON.stringify(value));
+    return file;
+  };
+
+  test("writes the Locked Week Menu note named after its Saturday, which passes the check once the Novel Recipe is saved", async () => {
+    const { run, vault } = await sandbox();
+
+    const result = await run(["plan", "write", await writePlan(vault, plan)]);
+    await meal(vault, "Shakshuka", "---\ncuisine: Middle Eastern\nnovel: true\n---\n# Shakshuka\n");
+
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(0);
+    expect(result.stdout).toBe("Wrote Week menus/Week 2026-11-28.md\n");
+    expect(await read(vault, "Week menus/Week 2026-11-28.md")).toBe(
+      [
+        "---",
+        "week_start: 2026-11-28",
+        'novel: "[[Shakshuka]]"',
+        "novel_source: https://example.com/shakshuka",
+        "novel_verdict:",
+        "---",
+        "# Week Menu 2026-11-28",
+        "",
+        "| Day        | Dinner                | Side     | Note            |",
+        "|------------|-----------------------|----------|-----------------|",
+        "| Sat 28 Nov | [[Vegetable Biryani]] |          |                 |",
+        "| Sun 29 Nov | [[Shakshuka]]         |          | Novel           |",
+        "| Mon 30 Nov | [[Dahl]]              | [[Naan]] | Double: cook    |",
+        "| Tue 1 Dec  | [[Dahl]]              |          | Double: 2nd day |",
+        "| Wed 2 Dec  | [[Dahl]]              | [[Naan]] | Double: cook    |",
+        "| Thu 3 Dec  | [[Dahl]]              |          | Double: 2nd day |",
+        "| Fri 4 Dec  | Free Day              |          |                 |",
+        "",
+        "## Staples this week",
+        "- Skip: milk ×1",
+        "- Ask Staples: peanut butter, oats ×2",
+        "",
+        "## Notes",
+        "- Bent repeat window for Dahl (Wish).",
+        "",
+      ].join("\n"),
+    );
+    expect((await run(["vault", "check"])).code).toBe(0);
+    const bundle = JSON.parse((await run(["bundle"], { now: "2026-11-28T10:00" })).stdout);
+    expect(bundle.weekMenus.find((w: { weekStart: string }) => w.weekStart === "2026-11-28").days.slice(1, 3)).toEqual([
+      { date: "2026-11-29", dinner: "Shakshuka", side: null, novel: true, double: null },
+      { date: "2026-11-30", dinner: "Dahl", side: "Naan", novel: false, double: "cook" },
+    ]);
+  });
+
+  test("a Novel Recipe cooked as a Double, and a week without one", async () => {
+    const { run, vault } = await sandbox();
+    const days = [...plan.days];
+    days[1] = { dinner: "Vegetable Biryani" };
+    days[2] = { dinner: "Shakshuka", side: "Naan", double: "cook", novel: true };
+    days[3] = { dinner: "Shakshuka", double: "second" };
+
+    const novelDouble = await run(["plan", "write", await writePlan(vault, { ...plan, days })]);
+    const noNovel = await run(["plan", "write", await writePlan(vault, { weekStart: "2026-12-05", days: plan.days.map(() => ({ dinner: null })) })]);
+
+    expect([novelDouble.code, noNovel.code]).toEqual([0, 0]);
+    expect(await read(vault, "Week menus/Week 2026-11-28.md")).toContain("| Mon 30 Nov | [[Shakshuka]]         | [[Naan]] | Novel, Double: cook |");
+    expect(await read(vault, "Week menus/Week 2026-12-05.md")).toMatch(/^---\nweek_start: 2026-12-05\nnovel:\nnovel_source:\nnovel_verdict:\n---\n/);
+    expect(await read(vault, "Week menus/Week 2026-12-05.md")).toContain("## Staples this week\n\n## Notes\n");
+  });
+
+  test("refuses a plan that doesn't make a Week Menu, writing nothing", async () => {
+    const { run, vault } = await sandbox();
+    const refused = async (value: unknown) => {
+      const result = await run(["plan", "write", await writePlan(vault, value)]);
+      expect(result.code).toBe(1);
+      return result.stderr;
+    };
+    const days = (change: (days: typeof plan.days) => void) => {
+      const copy = structuredClone(plan.days);
+      change(copy);
+      return { ...plan, days: copy };
+    };
+
+    expect(await refused({ ...plan, weekStart: "2026-11-21" })).toMatch(/Week menus\/Week 2026-11-21\.md is already there/);
+    expect(await refused({ ...plan, weekStart: "2026-11-27" })).toMatch(/2026-11-27 is not a Saturday/);
+    expect(await refused({ ...plan, days: plan.days.slice(1) })).toMatch(/7 days, Saturday to Friday/);
+    expect(await refused(days((d) => (d[3].dinner = "Vegetable Biryani")))).toMatch(/Tue 1 Dec: a Double 2nd day must follow the cook day of the same dinner/);
+    expect(await refused(days((d) => (d[0] = { dinner: "Vegetable Biryani", novel: true })))).toMatch(/one Novel Recipe/);
+    expect(await refused({ ...plan, staples: ["Skip: caviar"] })).toMatch(/"caviar" under Staples this week is not in Staples\.md/);
+    await expect(read(vault, "Week menus/Week 2026-11-28.md")).rejects.toThrow(/ENOENT/);
+  });
+});
+
 const read = (vault: string, file: string) => readFile(path.join(vault, file), "utf8");
 
 describe("food recipe delete", () => {

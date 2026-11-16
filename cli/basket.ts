@@ -159,7 +159,7 @@ type Staple = { name: string; product: number; quantity: number; kind: "Weekly" 
  * "- Skip: milk ×1" (one fewer; without ×n none at all), "- Extra: eggs ×1" (more; ×1 without ×n),
  * "- Ask Staples: peanut butter, oats ×2" (chosen Ask Staples; their usual quantity without ×n).
  */
-async function staplesThisWeek(vault: string, weekMenu: Note): Promise<Staple[]> {
+export async function staplesThisWeek(vault: string, weekMenu: Note): Promise<Staple[]> {
   const staples = await readStaples(vault);
   const chosen = new Map(staples.filter((s) => s.kind === "Weekly").map((s) => [s, s.quantity]));
   for (const line of section(weekMenu.body, "Staples this week")) {
