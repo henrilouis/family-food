@@ -145,7 +145,7 @@ const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** "2026-11-21" → "Sat 21 Nov", as a Week Menu's Day column writes it. */
-function dayLabel(date: string): string {
+export function dayLabel(date: string): string {
   const d = new Date(`${date}T00:00:00Z`);
   return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
 }

@@ -1,10 +1,13 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { AppleNotesError } from "./adapters/apple-notes/notes.ts";
 import { displayTarget, DisplayTargetUnreachable } from "./adapters/display-target.ts";
 import { buildBundle } from "./build-bundle.ts";
 import { writeBundleFiles } from "./bundle-files.ts";
 import { checkVault, formatCheck } from "./check.ts";
+import { readConfig } from "./config.ts";
+import { writeThisWeek } from "./this-week.ts";
 
 export const UNREACHABLE_MESSAGE = "Kitchen Display not updated, run `food publish` at home";
 
@@ -24,7 +27,8 @@ export async function publish(vault: string, now: Date, log: (line: string) => v
 
   const dir = await mkdtemp(path.join(os.tmpdir(), "food-release-"));
   try {
-    const version = await writeBundleFiles(dir, await buildBundle(vault, now));
+    const bundle = await buildBundle(vault, now);
+    const version = await writeBundleFiles(dir, bundle);
     const release = releaseId(now);
     try {
       await (await displayTarget()).publishRelease(dir, release);
@@ -32,6 +36,13 @@ export async function publish(vault: string, now: Date, log: (line: string) => v
     } catch (error) {
       if (!(error instanceof DisplayTargetUnreachable)) throw error;
       log(UNREACHABLE_MESSAGE);
+    }
+    try {
+      await writeThisWeek(await readConfig(), bundle, now);
+      log("This week note updated.");
+    } catch (error) {
+      if (!(error instanceof AppleNotesError)) throw error;
+      log(`Warning: This week note not updated: ${error.message}`);
     }
   } finally {
     await rm(dir, { recursive: true, force: true });

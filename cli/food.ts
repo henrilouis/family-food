@@ -2,6 +2,7 @@
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { AhError, ahGateway, parseAmount } from "./adapters/ah/gateway.ts";
+import { AppleNotesError, familyNotes, FOOD_WISHES, RECIPES_TO_ADD, type Deletion } from "./adapters/apple-notes/notes.ts";
 import { buildBundle } from "./build-bundle.ts";
 import { writeBundleFiles } from "./bundle-files.ts";
 import { checkVault, formatCheck } from "./check.ts";
@@ -27,7 +28,8 @@ Commands:
                         Serve the Kitchen Display page and a fresh bundle on this Mac
                         (port 8787 by default; --lan to open it on other devices too)
   publish               Send the current and upcoming Week Menus to the Kitchen Display Pi:
-                        vault check (errors stop it, exit 1), bundle, new release, keep the last 3.
+                        vault check (errors stop it, exit 1), bundle, new release, keep the last 3,
+                        then rewrite the "This week" Apple Note (a failure there warns, exit stays 0).
                         Prints "${UNREACHABLE_MESSAGE}" and exits 0 when the Pi is out of reach
   ah login              Log in to Albert Heijn in your browser (once; the token stays on this Mac)
   ah refresh            Renew the AH login now (says so when you need to log in again)
@@ -35,6 +37,16 @@ Commands:
                         Search AH products, cleaned up and cheapest per kg, l or piece first (JSON);
                         --need (e.g. 400g, 1.5l, 3 for pieces) drops packs that would waste too much
   ah bought <query>     Search the products the household bought before, most often bought first (JSON)
+  notes wishes [--json] List the Wishes in the shared Apple Note "Food wishes", one per line
+  notes wishes delete <wish>... [--json]
+                        Delete Wishes once a Week Menu honours them
+  notes recipes-to-add [--json]
+                        List the items in "Recipes to add": each URL, and each pasted recipe as one item
+  notes recipes-to-add remove <item>... [--json]
+                        Remove items once imported (give them exactly as listed)
+                        Deleting prints {"deleted", "notFound", "deleteByHand", "error"} with --json.
+                        Exit 2 when Notes won't take the change: delete the "deleteByHand" items by hand.
+                        (food publish also rewrites the "This week" note; a failure there only warns)
   deploy                Set up, update or repair the Kitchen Display Pi (ssh host \`kitchen\`)
                         from a clean main that matches origin
 `;
@@ -99,9 +111,53 @@ async function main(args: string[]): Promise<void> {
       return;
     case "ah":
       return ah(rest);
+    case "notes":
+      return notes(rest);
     default:
       throw new UsageError(usage);
   }
+}
+
+async function notes(args: string[]): Promise<void> {
+  const [note, ...rest] = args;
+  const family = familyNotes(await readConfig());
+  const { values, positionals } = parseArgs({ args: rest, allowPositionals: true, options: { json: { type: "boolean", default: false } } });
+  const [action, ...items] = positionals;
+  const report = (name: string, deletion: Deletion) => {
+    process.stdout.write(values.json ? JSON.stringify(deletion, null, 2) + "\n" : formatDeletion(name, deletion));
+    // 2: Notes wouldn't take the change; the skills fall back to reading only and list `deleteByHand` for an adult.
+    if (deletion.deleteByHand.length > 0) process.exitCode = 2;
+  };
+  switch (note) {
+    case "wishes": {
+      if (action === "delete" && items.length > 0) return report(FOOD_WISHES, await family.deleteWishes(items));
+      if (action !== undefined) throw new UsageError(usage);
+      const wishes = await family.wishes();
+      process.stdout.write(values.json ? JSON.stringify(wishes, null, 2) + "\n" : wishes.map((wish) => wish + "\n").join(""));
+      return;
+    }
+    case "recipes-to-add": {
+      if (action === "remove" && items.length > 0) return report(RECIPES_TO_ADD, await family.removeRecipesToAdd(items));
+      if (action !== undefined) throw new UsageError(usage);
+      const recipes = await family.recipesToAdd();
+      process.stdout.write(values.json ? JSON.stringify(recipes, null, 2) + "\n" : recipes.map((item) => item + "\n\n").join(""));
+      return;
+    }
+    default:
+      throw new UsageError(usage);
+  }
+}
+
+function formatDeletion(note: string, { deleted, notFound, deleteByHand, error }: Deletion): string {
+  const lines = [
+    ...deleted.map((item) => `Deleted from ${note}: ${item}`),
+    ...notFound.map((item) => `Not in ${note}: ${item}`),
+  ];
+  if (deleteByHand.length > 0) {
+    lines.push(`Could not change the Apple Note "${note}": ${error}`, `Please delete these from "${note}" by hand:`);
+    lines.push(...deleteByHand.map((item) => `- ${item.replace(/\n/g, "\n  ")}`));
+  }
+  return lines.map((line) => line + "\n").join("");
 }
 
 async function ah(args: string[]): Promise<void> {
@@ -142,7 +198,7 @@ async function ah(args: string[]): Promise<void> {
 }
 
 main(process.argv.slice(2)).catch((error) => {
-  const expected = [UsageError, VaultError, DeployRefused, DisplayTargetError, AhError].some((type) => error instanceof type);
+  const expected = [UsageError, VaultError, DeployRefused, DisplayTargetError, AhError, AppleNotesError].some((type) => error instanceof type);
   process.stderr.write(expected ? error.message.trimEnd() + "\n" : `${error.stack ?? error}\n`);
   process.exitCode = 1;
 });

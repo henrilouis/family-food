@@ -6,7 +6,7 @@ import path from "node:path";
 export type Config = {
   vault?: string;
   /** Adapters replaced by their local-folder fake, by adapter name (see `cli/adapters/`). No key → the real adapter. */
-  fakes?: { ah?: string; "display-target"?: string };
+  fakes?: { ah?: string; "display-target"?: string; "apple-notes"?: string };
 };
 
 export const configDir = () =>
