@@ -183,6 +183,37 @@ describe("food basket fill", () => {
     expect(quantities(await box.basket())).toEqual({ 1: 2, 2: 2, 4: 1, 5: 2 });
   });
 
+  test("reads Staples with the webshop id in its own AH id column, as the Recipe Vault keeps them; a Staple without one stops only the week that buys it", async () => {
+    const box = await basketBox([
+      { webshopId: 1, title: "AH Halfvolle melk 1 l", priceBeforeBonus: 1.15 },
+      { webshopId: 2, title: "AH Eieren 10 stuks", priceBeforeBonus: 3.49 },
+    ]);
+    await writeFile(
+      path.join(box.vault, "Staples.md"),
+      [
+        "| Staple | AH product | AH id | Quantity | Kind |",
+        "|---|---|---|---|---|",
+        "| Milk | AH Halfvolle melk 1 l | 1 | 2 | Weekly |",
+        "| Eggs | AH Eieren 10 stuks | 2 | 1 | Ask |",
+        "| Tea | | | 1 | Ask |",
+        "",
+      ].join("\n"),
+    );
+    await box.recipe("Shakshuka", ["*1* egg"]);
+    const match = { recipe: "Shakshuka", line: "1 egg", product: 2, packFraction: 0.05, kind: "Fresh" };
+
+    await box.weekMenu([["Shakshuka", "", ""]], ["Ask Staples: eggs"]);
+    const withEggs = await box.fill([match]);
+    const basketWithEggs = quantities(await box.basket());
+    await box.weekMenu([["Shakshuka", "", ""]], ["Ask Staples: tea"]);
+    const withTea = await box.fill([match]);
+
+    expect(withEggs.stderr).toBe("");
+    expect(basketWithEggs).toEqual({ 1: 2, 2: 1 });
+    expect(withTea.code).toBe(1);
+    expect(withTea.stderr).toMatch(/the Staple "Tea" has no AH product id/);
+  });
+
   test("leaves out Always in House items and the Cupboard Ingredients the household has at home", async () => {
     const box = await basketBox([
       { webshopId: 1, title: "AH Spinazie 400 g", priceBeforeBonus: 2.19 },
