@@ -24,6 +24,16 @@ export type AhBasket = {
   notes?: { description: string; quantity: number }[] | null;
 };
 
+/**
+ * An open order (checked out, or reopened for changes) as AH's GraphQL `orderFulfillments(status: OPEN)` returns it.
+ * Only the fields the gateway reads.
+ */
+export type AhOrder = {
+  orderId: number;
+  /** Delivery status, e.g. "SUBMITTED" or "REOPENED", and the slot's date ("2026-11-28"). */
+  delivery?: { status?: string; slot?: { date?: string } | null } | null;
+};
+
 /** What to add to Mijn lijst: products by webshop id, and free-text notes. Quantities are added to what is there. */
 export type AhBasketAdditions = {
   products: { id: number; quantity: number }[];
@@ -48,10 +58,19 @@ export interface AhClient {
   basket(): Promise<AhBasket>;
   /** Adds products (GraphQL `basketItemsAdd`, which adds to the quantity already there) and free-text notes; returns Mijn lijst after. */
   addToBasket(additions: AhBasketAdditions): Promise<AhBasket>;
+  /** The open orders (GraphQL `orderFulfillments(status: OPEN)`), with the user token. */
+  openOrders(): Promise<AhOrder[]>;
 }
 
 /** A problem with AH that the person running `food` can act on; printed without a stack trace. */
 export class AhError extends Error {}
+
+/** AH doesn't answer, or answers with a server error: its ordering is down (as for 12 days in October 2026). */
+export class AhUnavailableError extends AhError {
+  constructor(message = "AH is not answering. Its online ordering may be down; try again later.") {
+    super(message);
+  }
+}
 
 export class AhLoginError extends AhError {
   constructor(message = "Not logged in to AH. Run `food ah login` first.") {

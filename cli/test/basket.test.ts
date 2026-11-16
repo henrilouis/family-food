@@ -9,7 +9,7 @@ const repo = path.resolve(import.meta.dirname, "../..");
 type AhProduct = { webshopId: number; title: string; priceBeforeBonus: number; currentPrice?: number };
 
 /** One line of the fill-basket skill's list: an ingredient line of a Recipe and the AH product it matched. */
-type Match = { recipe: string; line: string; product?: number | null; packFraction?: number; kind?: string };
+type Match = { recipe: string; line: string; product?: number | null; packFraction?: number; kind?: string; title?: string };
 
 type FakeBasket = { products: { id: number; quantity: number }[]; notes: { description: string; quantity: number }[] };
 
@@ -60,6 +60,13 @@ async function basketBox(catalogue: AhProduct[]) {
     writeFile(path.join(ah, "basket.json"), JSON.stringify({ products: [], notes: [], ...basket }));
   const basket = async (): Promise<FakeBasket> => JSON.parse(await readFile(path.join(ah, "basket.json"), "utf8"));
 
+  /** Every write the fake AH received, in order; [] when none. */
+  const requests = async (): Promise<{ add: FakeBasket }[]> =>
+    JSON.parse(await readFile(path.join(ah, "basket-requests.json"), "utf8").catch(() => "[]"));
+
+  /** Sets the fake AH's mode: "order placed", "login expired" or "AH down". */
+  const mode = (state: Record<string, unknown>) => writeFile(path.join(ah, "mode.json"), JSON.stringify(state));
+
   /** Runs `food basket fill` for the week of 28 Nov with the skill's matches. */
   const fill = async (matches: Match[], haveAtHome: number[] = []) => {
     const input = path.join(box.configDir, "..", "matches.json");
@@ -67,7 +74,20 @@ async function basketBox(catalogue: AhProduct[]) {
     return box.run(["basket", "fill", "--week", WEEK, input], { now: "2026-11-26T20:00" });
   };
 
-  return { ...box, ah, recipe, weekMenu, weekMenuFile, staples, seedBasket, basket, fill };
+  /** The Week Menu's `## Basket` section, up to the end of the note. */
+  const basketSection = async () => {
+    const note = await readFile(weekMenuFile(), "utf8");
+    return note.slice(note.indexOf("## Basket"));
+  };
+
+  /** Changes the Week Menu's days by hand after a fill, keeping its `## Basket` section. */
+  const changeMenu = async (rows: [string, string, string][]) => {
+    const section = await basketSection();
+    await weekMenu(rows);
+    await writeFile(weekMenuFile(), `${await readFile(weekMenuFile(), "utf8")}\n${section}`);
+  };
+
+  return { ...box, ah, recipe, weekMenu, changeMenu, weekMenuFile, staples, seedBasket, basket, requests, mode, fill, basketSection };
 }
 
 const quantities = (basket: FakeBasket) => Object.fromEntries(basket.products.map((p) => [p.id, p.quantity]));
@@ -309,6 +329,7 @@ describe("food basket fill", () => {
         "- 2 × AH Spaghetti 500 g (€1.29 each)",
         "Already in Mijn lijst, added on top:",
         "- AH Passata 500 g: 1 + 1 = 2",
+        "No longer needed, remove these from Mijn lijst by hand: none",
         "Unmatched, added as notes:",
         "- basil leaves (10)",
         "Optional, not added:",
@@ -409,5 +430,357 @@ describe("food basket fill", () => {
       "- Product 216237 (id 216237) ×4: semi-skimmed yoghurt, plain unsweetened yogurt, plain yoghurt, Greek yoghurt (Staple)\n",
     );
     expect((await box.run(["vault", "check"])).code).toBe(0);
+  });
+});
+
+describe("food basket fill again", () => {
+  const catalogue = [
+    { webshopId: 1, title: "AH Spaghetti 500 g", priceBeforeBonus: 1.29 },
+    { webshopId: 2, title: "AH Passata 500 g", priceBeforeBonus: 0.99 },
+    { webshopId: 3, title: "AH Risottorijst 500 g", priceBeforeBonus: 2.49 },
+  ];
+  const pasta: Match[] = [
+    { recipe: "Pasta", line: "500g spaghetti", product: 1, packFraction: 1, kind: "Cupboard Ingredient" },
+    { recipe: "Pasta", line: "500g passata", product: 2, packFraction: 1, kind: "Cupboard Ingredient" },
+    { recipe: "Pasta", line: "5 basil leaves", product: null },
+  ];
+  const risotto: Match[] = [
+    { recipe: "Risotto", line: "300g risotto rice", product: 3, packFraction: 0.6, kind: "Cupboard Ingredient" },
+    { recipe: "Risotto", line: "10 sage leaves", product: null },
+  ];
+
+  async function filledOnce() {
+    const box = await basketBox(catalogue);
+    await box.recipe("Pasta", ["*500g* spaghetti", "*500g* passata", "*5* basil leaves"]);
+    await box.recipe("Risotto", ["*300g* risotto rice", "*10* sage leaves"]);
+    await box.weekMenu([["Pasta", "", ""], ["Risotto", "", ""]]);
+    const first = await box.fill([...pasta, ...risotto]);
+    if (first.code !== 0) throw new Error(`the first fill failed:\n${first.stderr}`);
+    return box;
+  }
+
+  test("after a menu change adds only the difference and lists what is no longer needed, removing nothing", async () => {
+    const box = await filledOnce();
+    await box.changeMenu([["Pasta", "", ""], ["Pasta", "", ""]]);
+
+    const result = await box.fill(pasta);
+
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(0);
+    expect((await box.requests()).slice(1)).toEqual([
+      { add: { products: [{ id: 1, quantity: 1 }, { id: 2, quantity: 1 }], notes: [{ description: "basil leaves (10)", quantity: 1 }] } },
+    ]);
+    expect(quantities(await box.basket())).toEqual({ 1: 2, 2: 2, 3: 1 });
+    expect(result.stdout).toContain(
+      [
+        "No longer needed, remove these from Mijn lijst by hand:",
+        "- 1 × AH Risottorijst 500 g",
+        "- Note: basil leaves (5)",
+        "- Note: sage leaves (10)",
+        "",
+      ].join("\n"),
+    );
+    expect(result.stdout).toContain("Already in Mijn lijst, added on top:\n- AH Spaghetti 500 g: 1 + 1 = 2\n- AH Passata 500 g: 1 + 1 = 2\n");
+    expect(await box.basketSection()).toBe(
+      [
+        "## Basket",
+        "- AH Spaghetti 500 g (id 1) ×2: spaghetti",
+        "- AH Passata 500 g (id 2) ×2: passata",
+        "- Note: basil leaves (10)",
+        "Have at home: none",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  test("with no menu change adds nothing", async () => {
+    const box = await filledOnce();
+
+    const result = await box.fill([...pasta, ...risotto]);
+
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(0);
+    expect(await box.requests()).toHaveLength(1);
+    expect(quantities(await box.basket())).toEqual({ 1: 1, 2: 1, 3: 1 });
+    expect(result.stdout).toContain("Added to Mijn lijst: none\n");
+    expect(result.stdout).toContain("No longer needed, remove these from Mijn lijst by hand: none\n");
+    expect(result.stdout).toContain(
+      "Added on an earlier run, unchanged:\n- 1 × AH Spaghetti 500 g\n- 1 × AH Passata 500 g\n- 1 × AH Risottorijst 500 g\n- Note: basil leaves (5)\n- Note: sage leaves (10)\n",
+    );
+  });
+
+  test("doesn't list as no longer needed what was already taken out of Mijn lijst", async () => {
+    const box = await filledOnce();
+    await box.seedBasket({ products: [{ id: 1, quantity: 1 }, { id: 2, quantity: 1 }], notes: [{ description: "basil leaves (5)", quantity: 1 }] });
+    await box.changeMenu([["Pasta", "", ""]]);
+
+    const result = await box.fill(pasta);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("No longer needed, remove these from Mijn lijst by hand: none\n");
+  });
+});
+
+describe("food basket fill once the order is placed", () => {
+  test("writes nothing to AH and gives add-multiple links of 25 products each", async () => {
+    const ids = Array.from({ length: 30 }, (_, i) => i + 1);
+    const box = await basketBox(ids.map((id) => ({ webshopId: id, title: `AH Product ${id}`, priceBeforeBonus: 1 })));
+    await box.recipe("Feast", ids.map((id) => `*${id}* thing ${id}`));
+    await box.weekMenu([["Feast", "", ""]]);
+    await box.mode({ mode: "order placed", date: WEEK });
+
+    const result = await box.fill(
+      ids.map((id) => ({ recipe: "Feast", line: `${id} thing ${id}`, product: id, packFraction: id === 7 ? 2 : 1, kind: "Fresh" })),
+    );
+
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(2);
+    expect(await box.requests()).toEqual([]);
+    const links = result.stdout.match(/https:\/\/\S+/g);
+    expect(links).toEqual([
+      `https://www.ah.nl/mijnlijst/add-multiple?${ids.slice(0, 25).map((id) => `p=${id}:${id === 7 ? 2 : 1}`).join("&")}`,
+      "https://www.ah.nl/mijnlijst/add-multiple?p=26:1&p=27:1&p=28:1&p=29:1&p=30:1",
+    ]);
+    expect(result.stdout).toMatch(/^The order for Saturday 28 Nov is already placed, so nothing was added to Mijn lijst\.\n/);
+  });
+
+  test("also gives a shopping list grouped into Fresh, Cupboard Ingredients, Staples and unmatched items", async () => {
+    const box = await basketBox([
+      { webshopId: 1, title: "AH Spaghetti 500 g", priceBeforeBonus: 1.29 },
+      { webshopId: 2, title: "AH Spinazie 400 g", priceBeforeBonus: 2.19 },
+      { webshopId: 3, title: "AH Halfvolle melk 1 l", priceBeforeBonus: 1.15 },
+    ]);
+    await box.staples([["Milk", "AH Halfvolle melk 1 l (3)", 2, "Weekly"]]);
+    await box.recipe("Pasta", ["*500g* spaghetti", "*400g* spinach", "*10* basil leaves", "chilli flakes (optional)"]);
+    await box.weekMenu([["Pasta", "", "Double: cook"], ["Pasta", "", "Double: 2nd day"]]);
+    await box.mode({ mode: "order placed", date: WEEK });
+
+    const result = await box.fill([
+      { recipe: "Pasta", line: "500g spaghetti", product: 1, packFraction: 1, kind: "Cupboard Ingredient", title: "AH Spaghetti 500 g" },
+      { recipe: "Pasta", line: "400g spinach", product: 2, packFraction: 1, kind: "Fresh" },
+      { recipe: "Pasta", line: "10 basil leaves", product: null },
+    ]);
+
+    expect(result.code).toBe(2);
+    expect(await box.requests()).toEqual([]);
+    expect(result.stdout).toContain(
+      [
+        "Shopping list:",
+        "Fresh:",
+        "- 2 × spinach",
+        "Cupboard Ingredients:",
+        "- 2 × AH Spaghetti 500 g: spaghetti",
+        "Staples:",
+        "- 2 × AH Halfvolle melk 1 l: Milk (Staple)",
+        "Unmatched:",
+        "- basil leaves (20)",
+        "Optional, not added:",
+        "- Pasta: chilli flakes (optional)",
+        "Have at home: none",
+        "",
+      ].join("\n"),
+    );
+    expect(await readFile(box.weekMenuFile(), "utf8")).not.toContain("## Basket");
+  });
+
+  test("after the menu changed post-checkout, gives an add-and-remove list for Mijn bestellingen instead", async () => {
+    const box = await basketBox([
+      { webshopId: 1, title: "AH Spaghetti 500 g", priceBeforeBonus: 1.29 },
+      { webshopId: 2, title: "AH Passata 500 g", priceBeforeBonus: 0.99 },
+      { webshopId: 3, title: "AH Risottorijst 500 g", priceBeforeBonus: 2.49 },
+    ]);
+    await box.recipe("Pasta", ["*500g* spaghetti", "*500g* passata", "*5* basil leaves"]);
+    await box.recipe("Risotto", ["*300g* risotto rice", "*10* sage leaves"]);
+    await box.weekMenu([["Pasta", "", ""], ["Risotto", "", ""]]);
+    const pasta: Match[] = [
+      { recipe: "Pasta", line: "500g spaghetti", product: 1, packFraction: 1, kind: "Cupboard Ingredient" },
+      { recipe: "Pasta", line: "500g passata", product: 2, packFraction: 1, kind: "Cupboard Ingredient" },
+      { recipe: "Pasta", line: "5 basil leaves", product: null },
+    ];
+    await box.fill([
+      ...pasta,
+      { recipe: "Risotto", line: "300g risotto rice", product: 3, packFraction: 0.6, kind: "Cupboard Ingredient" },
+      { recipe: "Risotto", line: "10 sage leaves", product: null },
+    ]);
+    await box.mode({ mode: "order placed", date: WEEK });
+    await box.changeMenu([["Pasta", "", ""], ["Pasta", "", ""]]);
+    const noteBefore = await readFile(box.weekMenuFile(), "utf8");
+
+    const result = await box.fill(pasta);
+
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(2);
+    expect(await box.requests()).toHaveLength(1);
+    expect(result.stdout).toBe(
+      [
+        "The order for Saturday 28 Nov is already placed, so nothing was changed in AH.",
+        "The Week Menu changed since the Basket was filled. Change the order in Mijn bestellingen:",
+        "Add to the order:",
+        "- 1 × AH Spaghetti 500 g: spaghetti",
+        "- 1 × AH Passata 500 g: passata",
+        "Remove from the order:",
+        "- 1 × AH Risottorijst 500 g",
+        "Unmatched, buy these yourself:",
+        "- basil leaves (10)",
+        "Unmatched, no longer needed:",
+        "- basil leaves (5)",
+        "- sage leaves (10)",
+        "",
+      ].join("\n"),
+    );
+    expect(await readFile(box.weekMenuFile(), "utf8")).toBe(noteBefore);
+  });
+
+  test("says there is nothing to change when the placed order already matches the Week Menu", async () => {
+    const box = await basketBox([{ webshopId: 1, title: "AH Spaghetti 500 g", priceBeforeBonus: 1.29 }]);
+    await box.recipe("Pasta", ["*500g* spaghetti"]);
+    await box.weekMenu([["Pasta", "", ""]]);
+    const pasta: Match[] = [{ recipe: "Pasta", line: "500g spaghetti", product: 1, packFraction: 1, kind: "Cupboard Ingredient" }];
+    await box.fill(pasta);
+    await box.mode({ mode: "order placed", date: WEEK, status: "REOPENED" });
+
+    const result = await box.fill(pasta);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toBe("The order for Saturday 28 Nov is already placed and has what the Week Menu needs: nothing to change.\n");
+    expect(await box.requests()).toHaveLength(1);
+  });
+
+  test("fills Mijn lijst as usual when the placed order is for another Saturday", async () => {
+    const box = await basketBox([{ webshopId: 1, title: "AH Spaghetti 500 g", priceBeforeBonus: 1.29 }]);
+    await box.recipe("Pasta", ["*500g* spaghetti"]);
+    await box.weekMenu([["Pasta", "", ""]]);
+    await box.mode({ mode: "order placed", date: "2026-11-21" });
+
+    const result = await box.fill([{ recipe: "Pasta", line: "500g spaghetti", product: 1, packFraction: 1, kind: "Cupboard Ingredient" }]);
+
+    expect(result.code).toBe(0);
+    expect(quantities(await box.basket())).toEqual({ 1: 1 });
+  });
+});
+
+describe("food basket fill when AH fails", () => {
+  const catalogue = [
+    { webshopId: 1, title: "AH Spaghetti 500 g", priceBeforeBonus: 1.29 },
+    { webshopId: 2, title: "AH Spinazie 400 g", priceBeforeBonus: 2.19 },
+  ];
+  const matches: Match[] = [
+    { recipe: "Pasta", line: "500g spaghetti", product: 1, packFraction: 1, kind: "Cupboard Ingredient", title: "AH Spaghetti 500 g" },
+    { recipe: "Pasta", line: "400g spinach", product: 2, packFraction: 1, kind: "Fresh", title: "AH Spinazie 400 g" },
+    { recipe: "Pasta", line: "10 basil leaves", product: null },
+  ];
+  async function pastaWeek() {
+    const box = await basketBox(catalogue);
+    await box.recipe("Pasta", ["*500g* spaghetti", "*400g* spinach", "*10* basil leaves"]);
+    await box.weekMenu([["Pasta", "", ""]]);
+    return box;
+  }
+  const logins = async (box: { ah: string }) => Number(await readFile(path.join(box.ah, "logins.json"), "utf8"));
+
+  test("with the login expired, prompts one re-login, then gives add-multiple links and the shopping list", async () => {
+    const box = await pastaWeek();
+    await box.mode({ mode: "login expired" });
+    const loginsBefore = await logins(box);
+
+    const result = await box.fill(matches);
+
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(2);
+    expect((await logins(box)) - loginsBefore).toBe(1);
+    expect(await box.requests()).toEqual([]);
+    expect(result.stdout).toMatch(/^AH login expired: log in again in the browser window that opens\.\n/);
+    expect(result.stdout).toContain("The AH login failed again, so nothing was added to Mijn lijst.\n");
+    expect(result.stdout).toContain("Links:\n- https://www.ah.nl/mijnlijst/add-multiple?p=1:1&p=2:1\n");
+    expect(result.stdout).toContain(
+      "Shopping list:\nFresh:\n- 1 × AH Spinazie 400 g: spinach\nCupboard Ingredients:\n- 1 × AH Spaghetti 500 g: spaghetti\nUnmatched:\n- basil leaves (10)\n",
+    );
+    expect(await readFile(box.weekMenuFile(), "utf8")).not.toContain("## Basket");
+  });
+
+  test("fills Mijn lijst once the re-login works", async () => {
+    const box = await pastaWeek();
+    await box.mode({ mode: "login expired", loginFixesIt: true });
+
+    const result = await box.fill(matches);
+
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(0);
+    expect(result.stdout).toMatch(/^AH login expired: log in again in the browser window that opens\.\nAdded to Mijn lijst:\n/);
+    expect(quantities(await box.basket())).toEqual({ 1: 1, 2: 1 });
+  });
+
+  test("with AH ordering down, writes the grouped shopping list without ids into the Basket section", async () => {
+    const box = await pastaWeek();
+    await box.mode({ mode: "AH down" });
+
+    const result = await box.fill(matches);
+
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(2);
+    expect(result.stdout).toBe(
+      [
+        "AH ordering is down, so nothing was added to Mijn lijst. The shopping list is in the Week Menu's ## Basket section:",
+        "Fresh:",
+        "- 1 × AH Spinazie 400 g: spinach",
+        "Cupboard Ingredients:",
+        "- 1 × AH Spaghetti 500 g: spaghetti",
+        "Unmatched:",
+        "- basil leaves (10)",
+        "Optional, not added: none",
+        "Have at home: none",
+        "",
+      ].join("\n"),
+    );
+    expect(await box.basketSection()).toBe(
+      [
+        "## Basket",
+        "Not in Mijn lijst, AH ordering was down:",
+        "Fresh:",
+        "- 1 × AH Spinazie 400 g: spinach",
+        "Cupboard Ingredients:",
+        "- 1 × AH Spaghetti 500 g: spaghetti",
+        "Unmatched:",
+        "- basil leaves (10)",
+        "Have at home: none",
+        "",
+      ].join("\n"),
+    );
+    expect((await box.run(["vault", "check"])).code).toBe(0);
+  });
+
+  test("with AH ordering down on a re-run, keeps what was added before and lists only the difference", async () => {
+    const box = await pastaWeek();
+    await box.fill(matches);
+    await box.changeMenu([["Pasta", "", ""], ["Pasta", "", ""]]);
+    await box.mode({ mode: "AH down" });
+
+    const down = await box.fill(matches);
+
+    expect(down.code).toBe(2);
+    expect(await box.basketSection()).toBe(
+      [
+        "## Basket",
+        "- AH Spaghetti 500 g (id 1) ×1: spaghetti",
+        "- AH Spinazie 400 g (id 2) ×1: spinach",
+        "- Note: basil leaves (10)",
+        "Not in Mijn lijst, AH ordering was down:",
+        "Fresh:",
+        "- 1 × AH Spinazie 400 g: spinach",
+        "Cupboard Ingredients:",
+        "- 1 × AH Spaghetti 500 g: spaghetti",
+        "Unmatched:",
+        "- basil leaves (20)",
+        "Have at home: none",
+        "",
+      ].join("\n"),
+    );
+
+    await rm(path.join(box.ah, "mode.json"));
+    const again = await box.fill(matches);
+
+    expect(again.code).toBe(0);
+    expect((await box.requests()).slice(1)).toEqual([
+      { add: { products: [{ id: 1, quantity: 1 }, { id: 2, quantity: 1 }], notes: [{ description: "basil leaves (20)", quantity: 1 }] } },
+    ]);
   });
 });

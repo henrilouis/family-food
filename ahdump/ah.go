@@ -123,7 +123,7 @@ func (a *ah) refresh(ctx context.Context) error {
 		if status := a.transport.lastStatus(); status >= 400 && status < 500 {
 			return fmt.Errorf("%w (%v)", errLogin, err)
 		}
-		return fmt.Errorf("renewing the login: %w", err)
+		return a.downError("renewing the login", err)
 	}
 	t.AccessToken, t.RefreshToken = tok.AccessToken, tok.RefreshToken
 	t.ExpiresAt = time.Now().Add(time.Duration(tok.ExpiresIn) * time.Second)
@@ -157,7 +157,7 @@ func (a *ah) anonymousClient(ctx context.Context) (*appie.Client, error) {
 		var tok tokenResponse
 		body := map[string]string{"clientId": clientID}
 		if err := a.client().DoRequest(ctx, http.MethodPost, "/mobile-auth/v1/auth/token/anonymous", body, &tok); err != nil {
-			return nil, fmt.Errorf("getting an anonymous token: %w", err)
+			return nil, a.downError("getting an anonymous token", err)
 		}
 		t = tokenFile{AccessToken: tok.AccessToken, ExpiresAt: time.Now().Add(time.Duration(tok.ExpiresIn) * time.Second)}
 		if err := writeToken(a.anonFile, t); err != nil {
@@ -191,7 +191,7 @@ func (a *ah) search(ctx context.Context, query string, user bool, sortOn string,
 		if user && a.transport.lastStatus() == http.StatusUnauthorized {
 			return nil, fmt.Errorf("%w (%v)", errLogin, err)
 		}
-		return nil, fmt.Errorf("search failed: %w", err)
+		return nil, a.downError("search failed", err)
 	}
 	if result.Products == nil {
 		result.Products = []json.RawMessage{}
