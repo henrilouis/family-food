@@ -10,6 +10,7 @@ The household's dinner planning, Albert Heijn Basket and Kitchen Display. See `G
 - `ahdump/`: the AH client, a Go tool on appie-go that the CLI runs (see `ahdump/README.md`)
 - `pi/`: the Kitchen Display Pi's setup script and Caddy config, run and uploaded by `food deploy`
 - `samples/`: a small sample Recipe Vault and the sample bundles built from it, used by the tests
+- `docs/pi-setup.md` and `docs/boox-setup.md`: flashing the Kitchen Display Pi and the Boox setup checklist
 - `docs/meal-properties.md`: the Meal properties and the fixed `cuisine` and `base` lists, which `food vault check` reads
 
 ## Setup
@@ -39,17 +40,7 @@ The local config lives in `~/Library/Application Support/family-food/` (`FOOD_CO
 
 ## Kitchen Display Pi
 
-The Pi only serves static files with Caddy over plain HTTP on the LAN (ADR 0002). To set it up:
-
-1. Flash Raspberry Pi OS Lite 64-bit with Raspberry Pi Imager presets: hostname `kitchen`, your SSH public key, Wi-Fi.
-2. Give it a DHCP reservation on the router and add an SSH alias on the Mac, in `~/.ssh/config`:
-   ```
-   Host kitchen
-     HostName <the reserved IP>
-     User <the user from Imager>
-   ```
-3. Run `ssh kitchen true` once to accept its host key.
-4. Run `food deploy` from a clean `main` that matches `origin`.
+The Pi only serves static files with Caddy over plain HTTP on the LAN (ADR 0002). To set it up, follow `docs/pi-setup.md`: flash Raspberry Pi OS Lite 64-bit with Imager presets (hostname `kitchen`, SSH key, Wi-Fi), give it a DHCP reservation, add the `kitchen` SSH alias on the Mac, then run `food deploy` and `food publish`. Then set up the Boox with `docs/boox-setup.md` (Fully Kiosk Browser, kiosk PIN, never sleep, always plugged in); Fully's exported settings go in `docs/fully-settings.json`.
 
 `food deploy` runs `pi/setup.sh` as root on the Pi (Caddy, key-only SSH, unattended security upgrades), then uploads the page to `/srv/kitchen/page/`. Run it again to update or repair the Pi; a run that has nothing to do says so. `food publish` uploads bundles into `/srv/kitchen/releases/` and switches the `current` symlink, which Caddy serves `*.json` from.
 
