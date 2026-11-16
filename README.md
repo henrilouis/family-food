@@ -9,6 +9,7 @@ The household's dinner planning, Albert Heijn Basket and Kitchen Display. See `G
 - `bundle/`: the display bundle's shared type definition, used by both
 - `samples/`: a small sample Recipe Vault and the sample bundles built from it, used by the tests
 - `docs/meal-properties.md`: the Meal properties and the fixed `cuisine` and `base` lists, which `food vault check` reads
+- `docs/backfill.md`: how the real recipes were moved into the Recipes vault, and what was decided on the way
 
 ## Setup
 
