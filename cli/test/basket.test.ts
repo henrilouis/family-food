@@ -64,7 +64,7 @@ async function basketBox(catalogue: AhProduct[]) {
   const requests = async (): Promise<{ add: FakeBasket }[]> =>
     JSON.parse(await readFile(path.join(ah, "basket-requests.json"), "utf8").catch(() => "[]"));
 
-  /** Sets the fake AH's mode: "order placed", "login expired" or "AH down". */
+  /** Sets the fake AH's mode: "order placed", "subscription slot", "login expired" or "AH down". */
   const mode = (state: Record<string, unknown>) => writeFile(path.join(ah, "mode.json"), JSON.stringify(state));
 
   /** Runs `food basket fill` for the week of 28 Nov with the skill's matches. */
@@ -720,6 +720,19 @@ describe("food basket fill once the order is placed", () => {
     expect(result.code).toBe(2);
     expect(await box.requests()).toEqual([]);
     expect(result.stdout).toMatch(/^The order for Monday 30 Nov is already placed, so nothing was added to Mijn lijst\.\n/);
+  });
+
+  test("fills Mijn lijst as usual when the week's order is only an empty slot from the delivery subscription", async () => {
+    const box = await basketBox([{ webshopId: 1, title: "AH Spaghetti 500 g", priceBeforeBonus: 1.29 }]);
+    await box.recipe("Pasta", ["*500g* spaghetti"]);
+    await box.weekMenu([["Pasta", "", ""]]);
+    await box.mode({ mode: "subscription slot", date: WEEK, status: "REOPENED" });
+
+    const result = await box.fill([{ recipe: "Pasta", line: "500g spaghetti", product: 1, packFraction: 1, kind: "Cupboard Ingredient" }]);
+
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(0);
+    expect(quantities(await box.basket())).toEqual({ 1: 1 });
   });
 
   test("fills Mijn lijst as usual when the placed order is for another week", async () => {

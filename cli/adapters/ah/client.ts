@@ -27,11 +27,15 @@ export type AhBasket = {
 };
 
 /**
- * An open order (checked out, or reopened for changes) as AH's GraphQL `orderFulfillments(status: OPEN)` returns it.
- * Only the fields the gateway reads.
+ * An open order as AH's GraphQL `orderFulfillments(status: OPEN)` returns it: checked out, reopened for changes, or
+ * an empty order the delivery subscription made for its slot. Only the fields the gateway reads.
  */
 export type AhOrder = {
   orderId: number;
+  /** Made by the delivery subscription for its recurring slot; it stays empty until Mijn lijst is checked out into it. */
+  isSubscriptionOrder?: boolean | null;
+  /** What the order costs; 0 while it holds no products. */
+  totalPrice?: { totalPrice?: { amount?: number | null } | null } | null;
   /** Delivery status, e.g. "SUBMITTED" or "REOPENED", and the slot's date ("2026-11-28"). */
   delivery?: { status?: string; slot?: { date?: string } | null } | null;
 };

@@ -19,10 +19,11 @@ const basketQuery = `query FamilyFoodBasket {
   }
 }`
 
-// The open orders (checked out, or reopened for changes) with their delivery slot, as appie-go's GetFulfillments asks for them.
+// The open orders with their delivery slot, as appie-go's GetFulfillments asks for them: checked out, reopened for
+// changes, or the delivery subscription's empty order for its slot (isSubscriptionOrder, a totalPrice of 0; checked live 2026-11-16).
 const openOrdersQuery = `query FamilyFoodOpenOrders {
   orderFulfillments(status: OPEN) {
-    result { orderId statusCode statusDescription shoppingType modifiable delivery { status slot { date startTime endTime } } }
+    result { orderId statusCode statusDescription shoppingType modifiable isSubscriptionOrder closingDateTime totalPrice { totalPrice { amount } } delivery { status slot { date startTime endTime } } }
   }
 }`
 

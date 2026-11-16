@@ -19,6 +19,7 @@ type FakeBasket = AhBasketAdditions;
 
 type Mode =
   | { mode: "order placed"; date: string; status?: string }
+  | { mode: "subscription slot"; date: string; status?: string }
   | { mode: "login expired"; loginFixesIt?: boolean }
   | { mode: "AH down" };
 
@@ -33,6 +34,8 @@ type Mode =
  * - `mode.json`: how AH behaves; missing means all is well.
  *   `{ "mode": "order placed", "date": "2026-11-28", "status": "SUBMITTED" }`: the order for delivery on `date`
  *   is checked out (`status` defaults to SUBMITTED; REOPENED means reopened for changes)
+ *   `{ "mode": "subscription slot", "date": "2026-11-28" }`: the delivery subscription's empty order for `date`,
+ *   which AH lists as an open order with a total of 0 until Mijn lijst is checked out into it (`status` as above)
  *   `{ "mode": "login expired" }`: AH refuses the user token; logging in again doesn't help, unless
  *   `"loginFixesIt": true`, when a login ends this mode
  *   `{ "mode": "AH down" }`: every request fails as when AH's ordering is down
@@ -149,8 +152,16 @@ export function fakeAhClient(folder: string, tokenFile: string): AhClient {
     async openOrders(): Promise<AhOrder[]> {
       await asUser();
       const current = await mode();
-      if (current?.mode !== "order placed") return [];
-      return [{ orderId: 1, delivery: { status: current.status ?? "SUBMITTED", slot: { date: current.date } } }];
+      if (current?.mode !== "order placed" && current?.mode !== "subscription slot") return [];
+      const empty = current.mode === "subscription slot";
+      return [
+        {
+          orderId: 1,
+          isSubscriptionOrder: empty,
+          totalPrice: { totalPrice: { amount: empty ? 0 : 42.5 } },
+          delivery: { status: current.status ?? "SUBMITTED", slot: { date: current.date } },
+        },
+      ];
     },
     async searchRecipes({ text, filters, size }) {
       await request(false);

@@ -13,7 +13,7 @@ import {
   type AllerhandeCandidate,
   type ProductSuggestion,
 } from "./allerhande.ts";
-import { AhError, AhLoginError, type AhBasket, type AhBasketAdditions, type AhClient } from "./client.ts";
+import { AhError, AhLoginError, type AhBasket, type AhBasketAdditions, type AhClient, type AhOrder } from "./client.ts";
 import { fakeAhClient } from "./fake.ts";
 import { previouslyBought, rankProducts, type Product } from "./products.ts";
 import type { Measure } from "../../amount.ts";
@@ -54,6 +54,7 @@ export interface AhGateway {
   /**
    * A placed order (checked out, or reopened for changes) delivering in the Week Menu's week: from its Saturday
    * `weekStart` (YYYY-MM-DD) to the Friday after, so also another slot booked on the Late path. `date` is its delivery day.
+   * The delivery subscription's empty orders for its slots don't count: Mijn lijst is checked out into them.
    * Null while the week's Basket is still only Mijn lijst. Needs the login.
    */
   placedOrder(weekStart: string): Promise<{ id: number; status: string; date: string } | null>;
@@ -103,7 +104,9 @@ export function ahGateway(config: Config): AhGateway {
       if (!(await loggedIn())) throw new AhLoginError();
       const friday = addDays(weekStart, 6);
       const inWeek = (date: string | undefined): date is string => !!date && date >= weekStart && date <= friday;
-      const order = (await client.openOrders()).find((o) => inWeek(o.delivery?.slot?.date));
+      // Only a total of exactly 0 counts as empty: without a total, the order stays placed and nothing is written.
+      const empty = (o: AhOrder) => o.totalPrice?.totalPrice?.amount === 0;
+      const order = (await client.openOrders()).find((o) => inWeek(o.delivery?.slot?.date) && !empty(o));
       return order ? { id: order.orderId, status: order.delivery?.status ?? "OPEN", date: order.delivery!.slot!.date! } : null;
     },
     async searchAllerhande({ text, season, cuisine, size = 20 }) {
