@@ -42,9 +42,10 @@ async function main(args: string[]): Promise<void> {
       return;
     }
     case "vault": {
-      const [sub] = rest;
+      const [sub, ...flags] = rest;
       if (sub !== "check") throw new UsageError(usage);
-      const check = await checkVault(await vaultPath());
+      const { values } = parseArgs({ args: flags, options: { published: { type: "boolean", default: false } } });
+      const check = await checkVault(await vaultPath(), { publishing: values.published ? now() : undefined });
       process.stdout.write(formatCheck(check));
       if (check.errors.length > 0) process.exitCode = 1;
       return;

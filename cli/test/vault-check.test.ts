@@ -161,6 +161,37 @@ describe("food vault check", () => {
       expect(result.stdout).toContain("0 errors, 1 warning");
     });
   });
+
+  describe("--published", () => {
+    test("checks only the Week Menus that would be published and the Recipes they use", async () => {
+      const { run, vault } = await sandbox();
+      await edit(vault, "Week menus/Week 2026-11-14.md", "[[Naan]]", "[[Roti]]");
+      await writeFile(path.join(vault, "Meals/Pasta Pesto.md"), "---\nrating: 5\n---\n# Pasta Pesto\n\n## Method\n\n1. Cook *a lot of* pasta.\n");
+      await edit(vault, "Meals/Vegetable Biryani.md", "cuisine: Indian", "cuisine: Nepalese");
+
+      const published = await run(["vault", "check", "--published"], { now: "2026-11-21T10:00" });
+      const whole = await run(["vault", "check"], { now: "2026-11-21T10:00" });
+
+      expect(published.code).toBe(0);
+      expect(published.stdout).not.toContain("Week 2026-11-14.md");
+      expect(published.stdout).not.toContain("Pasta Pesto.md");
+      expect(published.stdout).toMatch(/warning .*Meals\/Vegetable Biryani\.md: .*"Nepalese"/);
+      expect(published.stdout).toContain("0 errors, 1 warning");
+      expect(whole.code).toBe(1);
+      expect(whole.stdout).toContain("Week 2026-11-14.md");
+      expect(whole.stdout).toContain("Pasta Pesto.md");
+    });
+
+    test("still checks last week's Week Menu on Friday, while the Kitchen Display shows it", async () => {
+      const { run, vault } = await sandbox();
+      await edit(vault, "Week menus/Week 2026-11-14.md", "[[Naan]]", "[[Roti]]");
+
+      const result = await run(["vault", "check", "--published"], { now: "2026-11-20T18:00" });
+
+      expect(result.code).toBe(1);
+      expect(result.stdout).toMatch(/error .*Week menus\/Week 2026-11-14\.md: .*\[\[Roti\]\]/);
+    });
+  });
 });
 
 /** Replaces `from` with `to` in a vault note, failing if `from` isn't there. */

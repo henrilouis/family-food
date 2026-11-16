@@ -42,6 +42,12 @@ export async function readWeekMenuNotes(vault: string): Promise<Note[]> {
   return notes.filter((note) => note.properties.week_start);
 }
 
+/** A Week Menu note's `week_start` as YYYY-MM-DD. */
+export function weekStartOf(note: Note): string {
+  const start = note.properties.week_start;
+  return start instanceof Date ? start.toISOString().slice(0, 10) : String(start);
+}
+
 /** Every note in a vault folder (not its subfolders); none if the folder doesn't exist. */
 export async function readNotes(dir: string): Promise<Note[]> {
   let files: string[];
@@ -55,8 +61,7 @@ export async function readNotes(dir: string): Promise<Note[]> {
 }
 
 export function parseWeekMenu(note: Note): WeekMenu {
-  const start = note.properties.week_start;
-  const weekStart = start instanceof Date ? start.toISOString().slice(0, 10) : String(start);
+  const weekStart = weekStartOf(note);
   const days = dayTable(note).map((row): MenuDay => {
     const dinner = /^free day$/i.test(row.dinner ?? "") ? null : linkTarget(row.dinner ?? "");
     const noteCell = row.note ?? "";
