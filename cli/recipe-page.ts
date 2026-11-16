@@ -15,10 +15,15 @@ export type RecipePage = {
   /** schema.org diets such as "VegetarianDiet". Rarely set; never proof that a recipe has no meat. */
   diets: string[];
   language: string | null;
+  /** The site's schema.org aggregateRating, out of 5 (one decimal); null when the page has none. */
+  rating: Rating | null;
   ingredients: string[];
   /** Empty when the JSON-LD has no steps (the skill then reads them from the page). */
   steps: { section: string | null; text: string }[];
 };
+
+/** `count` is the number of ratings (else reviews) behind the value; null when the site doesn't say. */
+export type Rating = { value: number; count: number | null };
 
 /** An honest User-Agent: sites that block bots by name can, and pretending to be a browser trips their bot checks. */
 export const USER_AGENT = "family-food/0.1 (personal household recipe import; +https://github.com/henrilouis/family-food)";
@@ -136,9 +141,25 @@ function toRecipePage(o: JsonObject): Omit<RecipePage, "url"> {
     category: labels(o.recipeCategory),
     diets: list(o.suitableForDiet).map((d) => String(d).split(/[/:]/).pop()!),
     language: typeof o.inLanguage === "string" ? o.inLanguage : null,
+    rating: rating(o.aggregateRating),
     ingredients: list(o.recipeIngredient).map((line) => withoutPrices(text(line))).filter(Boolean),
     steps: steps(o.recipeInstructions, null),
   };
+}
+
+/** Scaled by `bestRating` (schema.org's default is 5): 8.4 of 10 is 4.2. Numbers may be strings with a decimal comma. */
+function rating(value: Json): Rating | null {
+  const o = list(value).find(isObject);
+  if (!o) return null;
+  const num = (v: Json) => {
+    const n = typeof v === "number" ? v : typeof v === "string" ? Number(v.trim().replace(",", ".")) : NaN;
+    return Number.isFinite(n) && (typeof v !== "string" || v.trim() !== "") ? n : null;
+  };
+  const stars = num(o.ratingValue);
+  const best = num(o.bestRating) ?? 5;
+  const count = num(o.ratingCount) ?? num(o.reviewCount);
+  if (stars === null || best <= 0 || count === 0) return null;
+  return { value: Math.round(Math.min(5, Math.max(0, (stars / best) * 5)) * 10) / 10, count };
 }
 
 function labels(value: Json): string | null {

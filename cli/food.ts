@@ -12,7 +12,7 @@ import { readConfig, writeConfig } from "./config.ts";
 import { fetchRecipePage, RecipePageError, RecipePageRefused } from "./recipe-page.ts";
 import { DisplayTargetError } from "./adapters/display-target.ts";
 import { deploy, DeployRefused } from "./deploy.ts";
-import { deleteRecipe, planContext, PlanInputError, recordVerdict, writeWeekMenu, type WeekPlan } from "./plan.ts";
+import { deleteRecipe, planContext, PlanInputError, recordVerdict, siteTrackRecord, writeWeekMenu, type WeekPlan } from "./plan.ts";
 import { listBasketLines, PinInputError, pinProducts, type PinnedProduct } from "./pinned-products.ts";
 import { preview } from "./preview.ts";
 import { publish, UNREACHABLE_MESSAGE } from "./publish.ts";
@@ -71,8 +71,8 @@ Commands:
                         Deleting prints {"deleted", "notFound", "deleteByHand", "error"} with --json.
                         Exit 2 when Notes won't take the change: delete the "deleteByHand" items by hand.
                         (food publish also rewrites the "This week" note; a failure there only warns)
-  recipe fetch <url>    Read the schema.org Recipe on an open recipe site's page (JSON), fetched with
-                        an honest User-Agent. Exit 2: a site food never fetches from (NYT Cooking,
+  recipe fetch <url>    Read the schema.org Recipe on an open recipe site's page (JSON, with its rating out
+                        of 5 and how many rated it), fetched with an honest User-Agent. Exit 2: a site food never fetches from (NYT Cooking,
                         Serious Eats, The Guardian) or Allerhande: ask for the recipe text instead.
                         Exit 3: no recipe data (fetch failed or none on the page): read the page another way
   recipe published <name> [--json]
@@ -85,6 +85,8 @@ Commands:
                         it was last planned
   plan verdict <week_start> <kept|rejected|not cooked>
                         Record the verdict on that Week Menu's Novel Recipe; kept or rejected clears its novel
+  plan sites            Each recipe site's track record (JSON): its Novel Recipes kept, rejected and not cooked
+                        (from the Week Menus) and the Meals whose source is on it
   plan write <plan.json>
                         Write a Locked Week Menu note from the planning-session skill's plan
                         ({weekStart, novelSource, days: [7 × {dinner, side, novel, double: "cook"|"second"}],
@@ -188,6 +190,10 @@ async function plan(args: string[]): Promise<void> {
     case "context":
       if (rest.length > 0) throw new UsageError(usage);
       process.stdout.write(JSON.stringify(await planContext(await vaultPath(), now()), null, 2) + "\n");
+      return;
+    case "sites":
+      if (rest.length > 0) throw new UsageError(usage);
+      process.stdout.write(JSON.stringify(await siteTrackRecord(await vaultPath()), null, 2) + "\n");
       return;
     case "verdict": {
       const [week, ...verdict] = rest;
