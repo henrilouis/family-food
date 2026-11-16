@@ -85,3 +85,13 @@ function toText(html: string): string {
 
 export const escapeHtml = (text: string) =>
   text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/** A line of a note to write: text, "" for a blank line, or a heading. */
+export type NoteLine = string | { heading: string };
+
+/** A whole note body: its name as the title, then `lines`. */
+export function noteHtml(title: string, lines: NoteLine[]): string {
+  const block = (line: NoteLine) =>
+    typeof line !== "string" ? `<div><h2>${escapeHtml(line.heading)}</h2></div>` : `<div>${line ? escapeHtml(line) : "<br>"}</div>`;
+  return [`<div><h1>${escapeHtml(title)}</h1></div>`, ...lines.map(block)].join("\n");
+}

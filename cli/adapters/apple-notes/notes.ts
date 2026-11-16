@@ -1,10 +1,11 @@
 import type { Config } from "../../config.ts";
 import { AppleNotesError, AppleNotesWriteError, type NotesClient } from "./client.ts";
 import { fakeNotesClient } from "./fake.ts";
-import { bodyLines, parseNote, withoutLines, type Line, type ParsedNote } from "./html.ts";
+import { bodyLines, noteHtml, parseNote, withoutLines, type Line, type NoteLine, type ParsedNote } from "./html.ts";
 import { osascriptNotesClient } from "./osascript.ts";
 
 export { AppleNotesError, AppleNotesWriteError, FOLDER } from "./client.ts";
+export type { NoteLine } from "./html.ts";
 
 export const FOOD_WISHES = "Food wishes";
 export const RECIPES_TO_ADD = "Recipes to add";
@@ -38,6 +39,8 @@ export interface FamilyNotes {
   recipesToAdd(): Promise<string[]>;
   /** Removes the given items (as `recipesToAdd()` lists them) once imported. */
   removeRecipesToAdd(items: string[]): Promise<Deletion>;
+  /** Replaces This week with `lines`; AppleNotesWriteError when Notes refuses or doesn't keep it. */
+  writeThisWeek(lines: NoteLine[]): Promise<void>;
 }
 
 /** The Family food notes: the fake when the local config names a folder in `fakes["apple-notes"]`, else the Notes app. */
@@ -86,6 +89,13 @@ export function familyNotes(config: Config): FamilyNotes {
       return recipeItems(await read(RECIPES_TO_ADD)).map((item) => item.text);
     },
     removeRecipesToAdd: (items) => deleteItems(RECIPES_TO_ADD, items, recipeItems),
+    async writeThisWeek(lines) {
+      const html = noteHtml(THIS_WEEK, lines);
+      await client.writeBody(THIS_WEEK, html);
+      const kept = await read(THIS_WEEK).catch(() => null);
+      const text = (note: ParsedNote) => note.lines.map((line) => line.text).filter(Boolean).join("\n");
+      if (!kept || text(kept) !== text(parseNote(html))) throw new AppleNotesWriteError(`Apple Notes didn't keep the change to "${THIS_WEEK}".`);
+    },
   };
 }
 

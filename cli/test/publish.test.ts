@@ -97,3 +97,113 @@ describe("food publish", () => {
     expect(await readFile(dahl, "utf8")).toBe(edited);
   });
 });
+
+/** A note body as the lines a person sees: one per block, tags and entities gone. */
+const noteText = (html: string) =>
+  html
+    .replace(/\n|<br>/g, "")
+    .replace(/<\/(div|li)>/g, "\n")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&amp;/g, "&")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line, index, lines) => line !== "" || lines[index - 1] !== "")
+    .join("\n")
+    .trim();
+
+const thisWeek = async (folder: string) =>
+  noteText((await readJson<Record<string, string>>(path.join(folder, "notes.json")))["This week"]);
+
+describe("food publish and the This week note", () => {
+  test("rewrites This week with the current and upcoming Week Menus", async () => {
+    const { run, fake } = await sandbox();
+    await fake("display-target");
+    const notes = await fake("apple-notes");
+    await writeFile(path.join(notes, "notes.json"), JSON.stringify({ "This week": "<div><h1>This week</h1></div><div>Old week</div>" }));
+
+    const result = await run(["publish"], { now: "2026-11-20T10:00" });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("This week note updated.");
+    expect(await thisWeek(notes)).toBe(
+      [
+        "This week",
+        "Published Fri 20 Nov 10:00 by food publish. Changes made here are overwritten.",
+        "",
+        "Week of Sat 14 Nov",
+        "Sat 14 Nov: Vegetable Biryani",
+        "Sun 15 Nov: Vegetable Biryani",
+        "Mon 16 Nov: Dahl with Naan (cook double)",
+        "Tue 17 Nov: Dahl (leftovers)",
+        "Wed 18 Nov: Free Day",
+        "Thu 19 Nov: Dahl with Naan (cook double)",
+        "Fri 20 Nov: Dahl (leftovers)",
+        "",
+        "Week of Sat 21 Nov",
+        "Sat 21 Nov: Dahl",
+        "Sun 22 Nov: Vegetable Biryani (new recipe)",
+        "Mon 23 Nov: Dahl with Naan (cook double)",
+        "Tue 24 Nov: Dahl (leftovers)",
+        "Wed 25 Nov: Dahl with Naan (cook double)",
+        "Thu 26 Nov: Dahl (leftovers)",
+        "Fri 27 Nov: Free Day",
+      ].join("\n"),
+    );
+  });
+
+  test("says when there is no Week Menu yet", async () => {
+    const { run, fake } = await sandbox();
+    await fake("display-target");
+    const notes = await fake("apple-notes");
+
+    const result = await run(["publish"], { now: "2026-11-28T10:00" });
+
+    expect(result.code).toBe(0);
+    expect(await thisWeek(notes)).toBe(
+      ["This week", "Published Sat 28 Nov 10:00 by food publish. Changes made here are overwritten.", "", "No Week Menu yet."].join("\n"),
+    );
+  });
+
+  test("is rewritten even when the Kitchen Display is out of reach", async () => {
+    const { run, fake } = await sandbox();
+    const pi = await fake("display-target");
+    await writeFile(path.join(pi, "fake.json"), JSON.stringify({ unreachable: true }));
+    const notes = await fake("apple-notes");
+
+    const result = await run(["publish"], { now: "2026-11-21T10:00" });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("Kitchen Display not updated");
+    expect(await thisWeek(notes)).toContain("Sat 21 Nov: Dahl");
+  });
+
+  test("a This week write that fails is skipped with a warning and the publish still succeeds", async () => {
+    const { run, fake } = await sandbox();
+    const pi = await fake("display-target");
+    const notes = await fake("apple-notes");
+    await writeFile(path.join(notes, "fake.json"), JSON.stringify({ writes: "fail" }));
+
+    const result = await run(["publish"], { now: "2026-11-21T10:00" });
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).toBe("");
+    expect(result.stdout).toContain("Kitchen Display updated");
+    expect(result.stdout).toMatch(/^Warning: This week note not updated: .*refused/m);
+    expect(await current(pi)).toMatch(/^releases\//);
+  });
+
+  test("a vault check error leaves This week alone", async () => {
+    const { run, fake, vault } = await sandbox();
+    await fake("display-target");
+    const notes = await fake("apple-notes");
+    const before = { "This week": "<div><h1>This week</h1></div><div>Last good week</div>" };
+    await writeFile(path.join(notes, "notes.json"), JSON.stringify(before));
+    const dahl = path.join(vault, "Meals/Dahl.md");
+    await writeFile(dahl, (await readFile(dahl, "utf8")).replace("double: true", "double: false"));
+
+    const result = await run(["publish"], { now: "2026-11-21T10:00" });
+
+    expect(result.code).toBe(1);
+    expect(await readJson(path.join(notes, "notes.json"))).toEqual(before);
+  });
+});
