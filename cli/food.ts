@@ -12,6 +12,10 @@ const usage = `Usage: food <command>
 Commands:
   config vault <path>   Set the Recipe Vault path in the local config
   config                Show the local config
+  vault check [--published] [--json]
+                        Check the Recipe Vault's format: errors (exit 1, block Publish) and warnings.
+                        --published checks only the Week Menus and Recipes a Publish would send;
+                        --json prints {"errors": [...], "warnings": [...]} with {file, message} items
   bundle                Print the display bundle as JSON
   preview [--port <n>] [--lan]
                         Serve the Kitchen Display page and a fresh bundle on this Mac
@@ -44,9 +48,12 @@ async function main(args: string[]): Promise<void> {
     case "vault": {
       const [sub, ...flags] = rest;
       if (sub !== "check") throw new UsageError(usage);
-      const { values } = parseArgs({ args: flags, options: { published: { type: "boolean", default: false } } });
+      const { values } = parseArgs({
+        args: flags,
+        options: { published: { type: "boolean", default: false }, json: { type: "boolean", default: false } },
+      });
       const check = await checkVault(await vaultPath(), { publishing: values.published ? now() : undefined });
-      process.stdout.write(formatCheck(check));
+      process.stdout.write(values.json ? JSON.stringify(check, null, 2) + "\n" : formatCheck(check));
       if (check.errors.length > 0) process.exitCode = 1;
       return;
     }

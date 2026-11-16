@@ -162,6 +162,21 @@ describe("food vault check", () => {
     });
   });
 
+  describe("--json", () => {
+    test("prints the errors and warnings as JSON for an agent, with the same exit code", async () => {
+      const { run, vault } = await sandbox();
+      await edit(vault, "Sides/Naan.md", "- *7g* active dry yeast", "- *one sachet* active dry yeast");
+      await edit(vault, "Meals/Dahl.md", "serves: 4", "serves: 8");
+
+      const result = await run(["vault", "check", "--json"]);
+
+      expect(result.code).toBe(1);
+      const check = JSON.parse(result.stdout);
+      expect(check.errors).toEqual([{ file: "Sides/Naan.md", message: expect.stringContaining('"one sachet"') }]);
+      expect(check.warnings).toEqual([{ file: "Meals/Dahl.md", message: expect.stringContaining("serves 8") }]);
+    });
+  });
+
   describe("--published", () => {
     test("checks only the Week Menus that would be published and the Recipes they use", async () => {
       const { run, vault } = await sandbox();
