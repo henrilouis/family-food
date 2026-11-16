@@ -11,7 +11,7 @@ import { readConfig, writeConfig } from "./config.ts";
 import { fetchRecipePage, RecipePageError, RecipePageRefused } from "./recipe-page.ts";
 import { DisplayTargetError } from "./adapters/display-target.ts";
 import { deploy, DeployRefused } from "./deploy.ts";
-import { planContext, recordVerdict } from "./plan.ts";
+import { deleteRecipe, planContext, recordVerdict } from "./plan.ts";
 import { preview } from "./preview.ts";
 import { publish, UNREACHABLE_MESSAGE } from "./publish.ts";
 import { VaultError } from "./vault.ts";
@@ -215,6 +215,12 @@ async function recipe(args: string[]): Promise<void> {
         const menus = weekMenus.length === 1 ? `Week Menu of ${weekMenus[0]}` : `Week Menus of ${weekMenus.join(", ")}`;
         process.stdout.write(`${name} is on the published ${menus}: run \`food publish\`.\n`);
       }
+      return;
+    }
+    case "delete": {
+      if (rest.length !== 1) throw new UsageError(usage);
+      const done = await deleteRecipe(await vaultPath(), rest[0]);
+      process.stdout.write(done.map((line) => line + "\n").join(""));
       return;
     }
     case "fetch": {

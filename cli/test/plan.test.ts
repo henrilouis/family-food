@@ -169,6 +169,40 @@ describe("food plan verdict", () => {
 
 const read = (vault: string, file: string) => readFile(path.join(vault, file), "utf8");
 
+describe("food recipe delete", () => {
+  test("deletes a 👎 Novel Recipe and unlinks it in the Week Menus, which keep its name, verdict and source and still publish", async () => {
+    const { run, vault } = await sandbox();
+    await run(["plan", "verdict", "2026-11-21", "rejected"]);
+    const weekBefore = await read(vault, "Week menus/Week 2026-11-21.md");
+
+    const result = await run(["recipe", "delete", "Vegetable Biryani"]);
+
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(0);
+    expect(result.stdout).toBe(
+      "Deleted Meals/Vegetable Biryani.md\nUnlinked it in Week menus/Week 2026-11-14.md, Week menus/Week 2026-11-21.md\n",
+    );
+    await expect(read(vault, "Meals/Vegetable Biryani.md")).rejects.toThrow(/ENOENT/);
+    const week = await read(vault, "Week menus/Week 2026-11-21.md");
+    expect(week).toBe(weekBefore.replace("| [[Vegetable Biryani]] |", "| Vegetable Biryani     |"));
+    expect(week).toContain('novel: "[[Vegetable Biryani]]"\nnovel_source: https://www.seriouseats.com/vegetable-biryani-5324853\nnovel_verdict: rejected\n');
+    expect(await read(vault, "Week menus/Week 2026-11-14.md")).not.toContain("[[Vegetable Biryani]]");
+    expect((await run(["vault", "check"])).code).toBe(0);
+    const context = JSON.parse((await run(["plan", "context"], { now: "2026-11-26T20:00" })).stdout);
+    expect(context.review).toMatchObject({ novel: "Vegetable Biryani", novelInVault: false });
+    expect(context.rejectedSources).toEqual(["https://www.seriouseats.com/vegetable-biryani-5324853"]);
+  });
+
+  test("refuses a Recipe that isn't in the vault", async () => {
+    const { run } = await sandbox();
+
+    const result = await run(["recipe", "delete", "Pasta Pesto"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toBe('No Recipe "Pasta Pesto" in Meals or Sides\n');
+  });
+});
+
 /** Writes a Week Menu note with these properties and day rows (Day, Dinner, Note). */
 async function weekMenu(vault: string, weekStart: string, properties: Record<string, string>, rows: string[][]) {
   const frontmatter = Object.entries({ week_start: weekStart, ...properties }).map(([key, value]) => `${key}: "${value}"`);

@@ -1,8 +1,8 @@
-import { access, readFile, writeFile } from "node:fs/promises";
+import { access, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { addDays } from "../bundle/kitchen-day.ts";
 import { dayLabel } from "./check.ts";
-import { findRecipeNote, linkTarget, parseWeekMenu, readNotes, readWeekMenuNotes, VaultError, weekStartOf, type Note } from "./vault.ts";
+import { findRecipeNote, linkTarget, parseWeekMenu, readNotes, readWeekMenuNotes, RECIPE_FOLDERS, VaultError, weekStartOf, type Note } from "./vault.ts";
 
 const WEEK_MENUS = "Week menus";
 
@@ -161,6 +161,37 @@ async function setProperty(file: string, key: string, value: string): Promise<vo
   }
   await writeFile(file, `---\n${lines.join("\n")}\n---${frontmatter[2]}${text.slice(frontmatter[0].length)}`);
 }
+/**
+ * Deletes a Recipe's note and turns the Week Menus' links to it into plain text, so they keep its name
+ * (and their Novel Recipe properties) and still pass `food vault check`. Returns what changed, for the person.
+ */
+export async function deleteRecipe(vault: string, name: string): Promise<string[]> {
+  const recipe = await findRecipeNote(vault, name);
+  if (!recipe) throw new VaultError(`No Recipe "${name}" in ${RECIPE_FOLDERS.join(" or ")}`);
+  await rm(recipe.file);
+  const unlinked: string[] = [];
+  for (const note of (await readNotes(path.join(vault, WEEK_MENUS))).sort((a, b) => a.file.localeCompare(b.file))) {
+    const text = (await readFile(note.file, "utf8")).replace(/\r\n/g, "\n");
+    const at = text.length - note.body.length;
+    const body = note.body
+      .split("\n")
+      .map((line) =>
+        line.replace(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/g, (link, target: string, alias?: string) => {
+          if (path.basename(target.trim()) !== name) return link;
+          const plain = alias?.trim() ?? name;
+          // Keep a table's columns lined up.
+          return line.trimStart().startsWith("|") ? plain.padEnd(link.length) : plain;
+        }),
+      )
+      .join("\n");
+    if (body === note.body) continue;
+    await writeFile(note.file, text.slice(0, at) + body);
+    unlinked.push(path.relative(vault, note.file));
+  }
+  return [`Deleted ${path.relative(vault, recipe.file)}`, ...(unlinked.length ? [`Unlinked it in ${unlinked.join(", ")}`] : [])];
+}
+
+/** The numbered lines under `## Method`. */
 function methodSteps(note: Note): number {
   let section = "";
   let steps = 0;
