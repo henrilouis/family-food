@@ -3,6 +3,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { AhError, ahGateway, parseAmount } from "./adapters/ah/gateway.ts";
 import { buildBundle } from "./build-bundle.ts";
+import { writeBundleFiles } from "./bundle-files.ts";
 import { checkVault, formatCheck } from "./check.ts";
 import { readConfig, writeConfig } from "./config.ts";
 import { DisplayTargetError } from "./adapters/display-target.ts";
@@ -20,7 +21,8 @@ Commands:
                         Check the Recipe Vault's format: errors (exit 1, block Publish) and warnings.
                         --published checks only the Week Menus and Recipes a Publish would send;
                         --json prints {"errors": [...], "warnings": [...]} with {file, message} items
-  bundle                Print the display bundle as JSON
+  bundle [--out <dir>]  Print the display bundle as JSON, or write it to <dir> as bundle.json
+                        with version.json (its content hash) next to it
   preview [--port <n>] [--lan]
                         Serve the Kitchen Display page and a fresh bundle on this Mac
                         (port 8787 by default; --lan to open it on other devices too)
@@ -73,8 +75,10 @@ async function main(args: string[]): Promise<void> {
       return;
     }
     case "bundle": {
+      const { values } = parseArgs({ args: rest, options: { out: { type: "string" } } });
       const bundle = await buildBundle(await vaultPath(), now());
-      process.stdout.write(JSON.stringify(bundle, null, 2) + "\n");
+      if (values.out) await writeBundleFiles(path.resolve(values.out), bundle);
+      else process.stdout.write(JSON.stringify(bundle, null, 2) + "\n");
       return;
     }
     case "preview": {
