@@ -38,6 +38,26 @@ export type Recipe = {
   title: string;
   /** The ingredient list: first the unnamed group, then any subsections such as "To serve". */
   ingredients: IngredientGroup[];
+  /** The numbered Method, one entry per step. */
+  method: Step[];
+  /** The paragraphs after the Method, as plain text. */
+  notes: string[];
+  /** Where the Recipe came from (a URL); null when the note doesn't say. */
+  source: string | null;
+};
+
+/** A Method step: plain text with the ingredient spans marked, in reading order. */
+export type Step = (string | IngredientSpan)[];
+
+/**
+ * An italic amount in a step and the words right after it that also appear in the Recipe's ingredient
+ * list, up to a joining word such as "and", "in" or "for": "*1 large* onion for 3 minutes" → 1 large + "onion".
+ * The page shows it in bold, as `amount.text + " " + ingredient`.
+ */
+export type IngredientSpan = {
+  amount: Amount;
+  /** The ingredient words, e.g. "red split lentils"; "" when none follow the amount. */
+  ingredient: string;
 };
 
 export type IngredientGroup = {
