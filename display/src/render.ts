@@ -1,5 +1,5 @@
 // Turns a screen from the deck into HTML. Checked by eye with `food preview`.
-import type { IngredientList, NotesScreen, Screen, StepScreen, StepText } from "./deck.ts";
+import type { IngredientList, NotesScreen, Screen, StepScreen, StepText, WeekRow, WeekScreen } from "./deck.ts";
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
@@ -31,6 +31,22 @@ function step(screen: StepScreen): string {
   );
 }
 
+/** A day's dinner on one line: "Dahl + Naan ×2", "↳ Dahl (leftovers)" or "Free Day". */
+function dayLine(row: WeekRow): string {
+  if (!row.dinner) return "Free Day";
+  const dinner = row.leftovers ? `↳ ${esc(row.dinner)} <span class="muted">(leftovers)</span>` : esc(row.dinner);
+  return dinner + (row.side ? ` <span class="muted">+ ${esc(row.side)}</span>` : "") + row.tags.map((t) => ` <span class="tag">${esc(t)}</span>`).join("");
+}
+
+function week(screen: WeekScreen): string {
+  const rows = screen.days.map((row) => {
+    const [weekday, ...date] = row.day.split(" ");
+    const classes = ["row", row.today ? "today" : "", row.dinner ? "" : "free-hatch"].filter(Boolean).join(" ");
+    return `<div class="${classes}"><div class="d">${esc(weekday)}<br>${esc(date.join(" "))}</div><div${row.leftovers ? ` class="second"` : ""}>${dayLine(row)}</div></div>`;
+  });
+  return head("Week Menu", `Published ${esc(screen.published)}`) + `<div class="fit week">${rows.join("")}</div>`;
+}
+
 function notes(screen: NotesScreen): string {
   const withNotes = screen.recipes.filter((r) => r.notes.length || r.source);
   const sections = withNotes.map(
@@ -44,8 +60,22 @@ function notes(screen: NotesScreen): string {
 
 export function renderScreen(screen: Screen): string {
   switch (screen.kind) {
+    case "week":
+      return week(screen);
     case "message":
       return head(`${esc(screen.day)} · Today`) + `<div class="fit message">${esc(screen.message)}</div>`;
+    case "free-day":
+      return (
+        head(`${esc(screen.day)} · Today`) +
+        `<div class="fit free-hatch"><div class="message">${esc(screen.title)}</div><p class="lead">${esc(screen.message)}.</p></div>`
+      );
+    case "leftovers":
+      return (
+        head(`${esc(screen.day)} · Today`) +
+        `<div class="fit"><div class="message">${esc(screen.title)}</div><p class="lead">${esc(screen.message)}.</p>` +
+        (screen.tomorrow ? `<p class="tomorrow">Tomorrow: ${dayLine(screen.tomorrow)}</p>` : "") +
+        `</div>`
+      );
     case "step":
       return step(screen);
     case "notes":
