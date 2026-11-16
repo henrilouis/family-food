@@ -16,7 +16,7 @@ export type Screen =
   | IngredientsScreen
   | StepScreen
   | NotesScreen
-  | LeftoversScreen
+  | DoubleSecondDayScreen
   | FreeDayScreen
   | RecipeGoneScreen
   | MessageScreen;
@@ -38,7 +38,7 @@ export type WeekRow = {
   dinner: string | null;
   side: string | null;
   /** A Double's 2nd day, which eats the day before's dinner. */
-  leftovers: boolean;
+  doubleSecondDay: boolean;
   /** "New" on the Novel Recipe, "×2" on a Double cook day. */
   tags: string[];
 };
@@ -77,8 +77,8 @@ export type NotesScreen = {
 };
 
 /** A Double's 2nd day: nothing to cook, the day before's dinner is reheated. */
-export type LeftoversScreen = {
-  kind: "leftovers";
+export type DoubleSecondDayScreen = {
+  kind: "double-second-day";
   day: string;
   /** The dinner's title. */
   title: string;
@@ -165,7 +165,7 @@ export function buildDeck(bundle: DisplayBundle, now: Date): Deck {
     const freeDay: FreeDayScreen = { kind: "free-day", day: dayLabel(today), title: "Free Day", message: "Nothing planned tonight" };
     return { screens: [weekAtAGlance, freeDay], current: 1 };
   }
-  if (day.double === "second") return { screens: [weekAtAGlance, leftoversScreen(bundle, day, day.dinner)], current: 1 };
+  if (day.double === "second") return { screens: [weekAtAGlance, doubleSecondDayScreen(bundle, day, day.dinner)], current: 1 };
   const recipe = bundle.recipes[day.dinner];
   const side = day.side ? bundle.recipes[day.side] : null;
   return {
@@ -174,10 +174,10 @@ export function buildDeck(bundle: DisplayBundle, now: Date): Deck {
   };
 }
 
-function leftoversScreen(bundle: DisplayBundle, day: MenuDay, dinner: string): LeftoversScreen {
+function doubleSecondDayScreen(bundle: DisplayBundle, day: MenuDay, dinner: string): DoubleSecondDayScreen {
   const tomorrow = bundle.weekMenus.flatMap((w) => w.days).find((d) => d.date === addDays(day.date, 1));
   return {
-    kind: "leftovers",
+    kind: "double-second-day",
     day: dayLabel(day.date),
     title: bundle.recipes[dinner].title,
     message: `2nd day of the Double, leftovers from ${weekdayName(addDays(day.date, -1))}, reheat gently`,
@@ -195,7 +195,7 @@ function weekRow(bundle: DisplayBundle, day: MenuDay, today: string): WeekRow {
     today: day.date === today,
     dinner: day.dinner ? bundle.recipes[day.dinner].title : day.unlinkedDinner ? `${day.unlinkedDinner} (deleted)` : null,
     side: day.side && bundle.recipes[day.side].title,
-    leftovers: day.double === "second",
+    doubleSecondDay: day.double === "second",
     tags: [...(day.novel ? ["New"] : []), ...(day.double === "cook" ? ["×2"] : [])],
   };
 }

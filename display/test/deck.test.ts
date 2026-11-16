@@ -126,7 +126,7 @@ const outline = (deck: Deck): string[] =>
     if (s.kind === "ingredients") return `ingredients: ${s.title}`;
     if (s.kind === "notes") return `notes: ${s.recipes.map((r) => r.title).join(", ")}`;
     if (s.kind === "week") return "week";
-    if (s.kind === "leftovers") return `leftovers: ${s.title}`;
+    if (s.kind === "double-second-day") return `Double 2nd day: ${s.title}`;
     if (s.kind === "free-day" || s.kind === "recipe-gone") return s.title;
     return s.message;
   });
@@ -163,15 +163,15 @@ describe("the week screen", () => {
     expect(weekShown(at("2026-11-23T18:00")).kind).toBe("week");
   });
 
-  test("has a row per day of today's Week Menu, marking today, leftovers, the Free Day, the Novel Recipe and Double cook days", () => {
+  test("has a row per day of today's Week Menu, marking today, Double 2nd days, the Free Day, the Novel Recipe and Double cook days", () => {
     expect(weekShown(at("2026-11-23T18:00")).days).toEqual([
-      { day: "Sat 21 Nov", today: false, dinner: "Dahl", side: null, leftovers: false, tags: [] },
-      { day: "Sun 22 Nov", today: false, dinner: "Vegetable Biryani", side: null, leftovers: false, tags: ["New"] },
-      { day: "Mon 23 Nov", today: true, dinner: "Dahl", side: "Naan", leftovers: false, tags: ["×2"] },
-      { day: "Tue 24 Nov", today: false, dinner: "Dahl", side: null, leftovers: true, tags: [] },
-      { day: "Wed 25 Nov", today: false, dinner: "Dahl", side: "Naan", leftovers: false, tags: ["×2"] },
-      { day: "Thu 26 Nov", today: false, dinner: "Dahl", side: null, leftovers: true, tags: [] },
-      { day: "Fri 27 Nov", today: false, dinner: null, side: null, leftovers: false, tags: [] },
+      { day: "Sat 21 Nov", today: false, dinner: "Dahl", side: null, doubleSecondDay: false, tags: [] },
+      { day: "Sun 22 Nov", today: false, dinner: "Vegetable Biryani", side: null, doubleSecondDay: false, tags: ["New"] },
+      { day: "Mon 23 Nov", today: true, dinner: "Dahl", side: "Naan", doubleSecondDay: false, tags: ["×2"] },
+      { day: "Tue 24 Nov", today: false, dinner: "Dahl", side: null, doubleSecondDay: true, tags: [] },
+      { day: "Wed 25 Nov", today: false, dinner: "Dahl", side: "Naan", doubleSecondDay: false, tags: ["×2"] },
+      { day: "Thu 26 Nov", today: false, dinner: "Dahl", side: null, doubleSecondDay: true, tags: [] },
+      { day: "Fri 27 Nov", today: false, dinner: null, side: null, doubleSecondDay: false, tags: [] },
     ]);
   });
 
@@ -179,7 +179,7 @@ describe("the week screen", () => {
     const days = weekShown(at("2026-11-20T18:00")).days;
 
     expect(days[0].day).toBe("Sat 14 Nov");
-    expect(days.at(-1)).toMatchObject({ day: "Fri 20 Nov", today: true, leftovers: true });
+    expect(days.at(-1)).toMatchObject({ day: "Fri 20 Nov", today: true, doubleSecondDay: true });
   });
 
   test("says when the bundle was published", () => {
@@ -377,19 +377,19 @@ describe("a Double 2nd day", () => {
   test("shows the leftovers and tomorrow's dinner instead of a recipe", () => {
     const deck = buildDeck(sampleBundle, at("2026-11-24T18:00"));
 
-    expect(outline(deck)).toEqual(["week", "leftovers: Dahl"]);
+    expect(outline(deck)).toEqual(["week", "Double 2nd day: Dahl"]);
     expect(deck.screens[deck.current]).toEqual({
-      kind: "leftovers",
+      kind: "double-second-day",
       day: "Tue 24 Nov",
       title: "Dahl",
       message: "2nd day of the Double, leftovers from Monday, reheat gently",
-      tomorrow: { day: "Wed 25 Nov", today: false, dinner: "Dahl", side: "Naan", leftovers: false, tags: ["×2"] },
+      tomorrow: { day: "Wed 25 Nov", today: false, dinner: "Dahl", side: "Naan", doubleSecondDay: false, tags: ["×2"] },
     });
   });
 
   test("finds tomorrow's dinner in next week's Week Menu", () => {
     expect(shown(at("2026-11-20T18:00"))).toMatchObject({
-      kind: "leftovers",
+      kind: "double-second-day",
       message: "2nd day of the Double, leftovers from Thursday, reheat gently",
       tomorrow: { day: "Sat 21 Nov", dinner: "Dahl" },
     });
@@ -398,6 +398,6 @@ describe("a Double 2nd day", () => {
   test("leaves tomorrow out when no Week Menu covers it yet", () => {
     const bundle = withDay("2026-11-27", { dinner: "Dahl", double: "second" });
 
-    expect(shown(at("2026-11-27T18:00"), bundle)).toMatchObject({ kind: "leftovers", tomorrow: null });
+    expect(shown(at("2026-11-27T18:00"), bundle)).toMatchObject({ kind: "double-second-day", tomorrow: null });
   });
 });

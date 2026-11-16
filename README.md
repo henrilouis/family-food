@@ -37,14 +37,14 @@ food ah recipes linzen --season winter    # Allerhande's vegetarian main courses
 food ah suggestions <allerhande url>      # AH's product for each ingredient of an Allerhande recipe (JSON)
 food basket lines --week 2026-11-21       # the week's ingredient lines with their Pinned Products (JSON)
 food products pin pins.json               # add or replace Pinned Products in Products.md
-food basket fill --week 2026-11-21 matches.json   # see samples/basket/ for the matches format
+food basket fill --week 2026-11-21 matches.json   # see samples/basket/ for the Matches format
 ```
 
-Say "fill the Basket" to the agent (the Planning Session does it after "lock it"): the `fill-basket` skill (`.agents/skills/fill-basket/SKILL.md`) matches the week's ingredient lines to AH products, asks about new matches and Cupboard Ingredients in one message, pins what the adult confirms and runs `food basket fill`.
+Say "fill the Basket" to the agent (the Planning Session does it after "lock it"): the `fill-basket` skill (`.agents/skills/fill-basket/SKILL.md`) matches the week's ingredient lines to AH products, asks about new Matches and Cupboard Ingredients in one message, pins what the adult confirms and runs `food basket fill`.
 
 `food basket lines` gives each line its ready `match` for `food basket fill` when it has a Pinned Product, with the share of a pack worked out from the Pack column where the amounts compare (g, ml, spoons, tins, pieces with "1 kg ≈ 8 onions").
 
-`food basket fill` is what the fill-basket skill runs once the matches are confirmed. It reads the Week Menu, `Staples.md` and the Recipes, adds to Mijn lijst (never removes; an ingredient or chosen Staple without an AH product goes in as a free-text note), writes the Week Menu's `## Basket` section and prints a report. Run again after a menu change, it adds only the difference with `## Basket` and lists what is no longer needed. It exits 2 when it wrote nothing to AH and someone has to act on its output:
+`food basket fill` is what the fill-basket skill runs once the Matches are confirmed. It reads the Week Menu, `Staples.md` and the Recipes, adds to Mijn lijst (never removes; an ingredient or chosen Staple without an AH product goes in as a free-text note), writes the Week Menu's `## Basket` section and prints a report. Run again after a menu change, it adds only the difference with `## Basket` and lists what is no longer needed. It exits 2 when it wrote nothing to AH and someone has to act on its output:
 
 - an order delivering in the Week Menu's week (the Saturday slot, or another slot on the Late path) is already placed: add-multiple links (25 products each) and a grouped shopping list, or, when the Basket was filled before checkout and the menu changed since, an add-and-remove list for Mijn bestellingen;
 - the AH login failed, also after logging in again once in the browser: add-multiple links and the shopping list;

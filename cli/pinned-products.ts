@@ -32,8 +32,8 @@ export type BasketLine = {
   times: number;
   optional: boolean;
   pinned: PinnedProduct | null;
-  /** The line's entry for `food basket fill` from its Pinned Product; null when it has none, or the line is optional. */
-  match: LineMatch | null;
+  /** The line's Match for `food basket fill`, from its Pinned Product; null when it has none, or the line is optional. */
+  match: MatchFromPin | null;
 };
 
 /**
@@ -47,8 +47,8 @@ function pinName(ingredient: Ingredient): string {
   return tinned ? `tinned ${name}` : name;
 }
 
-/** A `food basket fill` entry whose `packFraction` is null when it couldn't be worked out. */
-type LineMatch = Omit<Match, "packFraction"> & { packFraction?: number | null };
+/** A Match taken from a Pinned Product; its `packFraction` is null when it couldn't be worked out. */
+type MatchFromPin = Omit<Match, "packFraction"> & { packFraction?: number | null };
 
 /** Every ingredient line of the Recipes and Sides the Week Menu of `weekStart` buys, with its Pinned Product. */
 export async function listBasketLines(vault: string, weekStart: string): Promise<{ weekStart: string; lines: BasketLine[] }> {
@@ -60,14 +60,14 @@ export async function listBasketLines(vault: string, weekStart: string): Promise
       const name = pinName(ingredient);
       const line = ingredient.amount ? `*${ingredient.amount.text}* ${ingredient.text}` : ingredient.text;
       const pinned = pins.find((pin) => sameIngredient(pin.ingredient, name)) ?? null;
-      return { recipe, line, ingredient: name, times, optional, pinned, match: pinned && !optional ? pinnedMatch(recipe, line, ingredient, pinned) : null };
+      return { recipe, line, ingredient: name, times, optional, pinned, match: pinned && !optional ? matchFromPin(recipe, line, ingredient, pinned) : null };
     }),
   };
 }
 
-/** The line's entry for `food basket fill` from its Pinned Product; `packFraction` is null when the amount and the Pack don't compare. */
-function pinnedMatch(recipe: string, line: string, ingredient: Ingredient, pin: PinnedProduct): LineMatch {
-  const match: LineMatch = { recipe, line, product: pin.product };
+/** The line's Match from its Pinned Product; `packFraction` is null when the amount and the Pack don't compare. */
+function matchFromPin(recipe: string, line: string, ingredient: Ingredient, pin: PinnedProduct): MatchFromPin {
+  const match: MatchFromPin = { recipe, line, product: pin.product };
   if (pin.title) match.title = pin.title;
   match.kind = pin.kind;
   if (pin.product !== null && pin.kind !== "Always in House") match.packFraction = packFraction(ingredient.amount, pin.pack);
@@ -117,14 +117,14 @@ export class PinInputError extends UserError {}
 
 const NEW_PRODUCTS_NOTE = `# Products
 
-Pinned Products: confirmed matches from an ingredient to an Albert Heijn product. Basket filling adds a row when a match is confirmed; a correction replaces the row. Kind is Fresh, Cupboard Ingredient or Always in House.
+Pinned Products: the Albert Heijn product remembered for a recipe ingredient, bought without asking again. Basket filling adds a row when an adult confirms a new Match; a correction replaces the row. Kind is Fresh, Cupboard Ingredient or Always in House.
 
 | Ingredient | AH product | AH id | Pack | Kind |
 |---|---|---|---|---|
 `;
 
 /**
- * Writes confirmed matches to Products.md: a pin replaces the row for the same ingredient (singular or plural),
+ * Pins the products of confirmed Matches in Products.md: a pin replaces the row for the same ingredient (singular or plural),
  * otherwise it is added at the end. Keeps the table's columns and, when its columns are padded, re-pads them.
  * Returns what changed, one line per pin. Refuses (and writes nothing) when a pin isn't complete.
  */

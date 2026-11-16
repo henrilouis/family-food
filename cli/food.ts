@@ -57,13 +57,13 @@ Commands:
   basket lines --week <YYYY-MM-DD>
                         The ingredient lines of the Recipes a Locked Week Menu buys (JSON): recipe, line,
                         ingredient, times (dinners), optional, the Pinned Product from Products.md, and for
-                        pinned lines the ready "match" for basket fill (packFraction null when the line's
+                        pinned lines its ready Match ("match") for basket fill (packFraction null when the line's
                         amount and the Pack don't compare)
   products pin <pins.json>
-                        Add confirmed matches to Products.md ([{ingredient, product, title, pack, kind}];
+                        Pin the products of confirmed Matches in Products.md ([{ingredient, product, title, pack, kind}];
                         product null for none); a pin for an ingredient already there replaces its row
   basket fill --week <YYYY-MM-DD> <matches.json>
-                        Fill Mijn lijst for a Locked Week Menu from the fill-basket skill's matches
+                        Fill Mijn lijst for a Locked Week Menu from the fill-basket skill's Matches
                         ({"lines": [{recipe, line, product, packFraction, kind}], "haveAtHome": [ids]}):
                         Doubles ×2, Staples added, summed and rounded to whole packs, unmatched lines as
                         notes. Never removes anything. Writes the Week Menu's ## Basket section and a report.
