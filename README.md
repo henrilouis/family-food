@@ -36,7 +36,11 @@ food ah basket                            # Mijn lijst as JSON
 food basket fill --week 2026-11-21 matches.json   # see samples/basket/ for the matches format
 ```
 
-`food basket fill` is what the fill-basket skill runs once the matches are confirmed. It reads the Week Menu, `Staples.md` and the Recipes, adds to Mijn lijst (never removes), writes the Week Menu's `## Basket` section and prints a report.
+`food basket fill` is what the fill-basket skill runs once the matches are confirmed. It reads the Week Menu, `Staples.md` and the Recipes, adds to Mijn lijst (never removes), writes the Week Menu's `## Basket` section and prints a report. Run again after a menu change, it adds only the difference with `## Basket` and lists what is no longer needed. It exits 2 when it wrote nothing to AH and someone has to act on its output:
+
+- the coming Saturday's order is already placed: add-multiple links (25 products each) and a grouped shopping list, or, when the Basket was filled before checkout and the menu changed since, an add-and-remove list for Mijn bestellingen;
+- the AH login failed, also after logging in again once in the browser: add-multiple links and the shopping list;
+- AH doesn't answer (ordering down): the shopping list without ids, also written into `## Basket`.
 
 The AH token is kept in the local config folder with mode 600, never in the Recipe Vault. The tests use a fake AH; `ahdump/README.md` lists the checks to do by hand against the live API.
 

@@ -43,7 +43,12 @@ Commands:
                         Fill Mijn lijst for a Locked Week Menu from the fill-basket skill's matches
                         ({"lines": [{recipe, line, product, packFraction, kind}], "haveAtHome": [ids]}):
                         Doubles ×2, Staples added, summed and rounded to whole packs, unmatched lines as
-                        notes. Never removes anything. Writes the Week Menu's ## Basket section and a report
+                        notes. Never removes anything. Writes the Week Menu's ## Basket section and a report.
+                        Run again, adds only the difference with ## Basket and lists what is no longer needed.
+                        On an expired AH login, opens the AH login once. Exit 2 when nothing was written to AH:
+                        order already placed (add-multiple links and a shopping list, or an add-and-remove
+                        list for Mijn bestellingen after a menu change), login failed (links and the list),
+                        AH down (the list, also in ## Basket)
   notes wishes [--json] List the Wishes in the shared Apple Note "Food wishes", one per line
   notes wishes delete <wish>... [--json]
                         Delete Wishes once a Week Menu honours them
