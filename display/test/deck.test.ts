@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import type { DisplayBundle } from "../../bundle/bundle.ts";
 import sample from "../../samples/bundles/published-2026-11-20.json" with { type: "json" };
-import { buildDeck, type IngredientsScreen, type Screen } from "../src/deck.ts";
+import { buildDeck, press, type Deck, type IngredientsScreen, type Screen, type StepScreen } from "../src/deck.ts";
 
 const sampleBundle = sample as DisplayBundle;
 const at = (iso: string) => new Date(iso);
@@ -85,5 +85,145 @@ describe("today's ingredients", () => {
   test("tags the Novel Recipe", () => {
     expect(ingredientsShown(at("2026-11-22T18:00")).tags).toEqual(["Novel · first time"]);
     expect(ingredientsShown(at("2026-11-21T18:00")).tags).toEqual([]);
+  });
+});
+
+/** One line per screen, enough to tell the deck's order. */
+const outline = (deck: Deck): string[] =>
+  deck.screens.map((s) => {
+    if (s.kind === "step") return `${s.recipe} · Step ${s.step} of ${s.steps}`;
+    if (s.kind === "ingredients") return `ingredients: ${s.title}`;
+    if (s.kind === "notes") return `notes: ${s.recipes.map((r) => r.title).join(", ")}`;
+    return s.message;
+  });
+
+describe("the cooking deck", () => {
+  test("runs from today's ingredients through the main Recipe's steps and the Side's steps to the notes and source", () => {
+    const deck = buildDeck(sampleBundle, at("2026-11-23T18:00"));
+
+    expect(outline(deck)).toEqual([
+      "ingredients: Dahl",
+      "Dahl · Step 1 of 3",
+      "Dahl · Step 2 of 3",
+      "Dahl · Step 3 of 3",
+      "Naan · Step 1 of 4",
+      "Naan · Step 2 of 4",
+      "Naan · Step 3 of 4",
+      "Naan · Step 4 of 4",
+      "notes: Dahl, Naan",
+    ]);
+    expect(deck.current).toBe(0);
+  });
+});
+
+describe("a step screen", () => {
+  const stepScreen = (deck: Deck, index: number): StepScreen => {
+    const screen = deck.screens[index];
+    if (screen.kind !== "step") throw new Error(`expected a step screen, got ${screen.kind}`);
+    return screen;
+  };
+  const deck = buildDeck(sampleBundle, at("2026-11-23T18:00"));
+
+  test("shows the step with its amounts and ingredient words as bold spans", () => {
+    const screen = stepScreen(deck, 2);
+
+    expect(screen.text).toEqual([
+      "Heat ",
+      { amount: "4 tbsp", ingredient: "sunflower oil" },
+      " in a small frying pan and fry ",
+      { amount: "10", ingredient: "lime leaves" },
+      " and ",
+      { amount: "1 tsp", ingredient: "mustard seeds" },
+      " for 1 minute. Remove from heat and set aside. Warm ",
+      { amount: "1", ingredient: "naan" },
+      " according to package instructions.",
+    ]);
+  });
+
+  test("lists the steps still to come, the Side's under its name", () => {
+    const screen = stepScreen(deck, 2);
+
+    expect(screen.upcoming.map((u) => [u.heading, u.step])).toEqual([
+      [null, 3],
+      ["Naan", 1],
+      [null, 2],
+      [null, 3],
+      [null, 4],
+    ]);
+    expect(screen.upcoming[4].text).toEqual(["Brush the naan with ", { amount: "3 tbsp", ingredient: "melted butter" }, " and serve warm."]);
+  });
+
+  test("has nothing to come on the last step", () => {
+    expect(stepScreen(deck, 7).upcoming).toEqual([]);
+  });
+
+  test("tracks progress through all of tonight's steps", () => {
+    expect([1, 3, 4, 7].map((i) => stepScreen(deck, i).progress)).toEqual([
+      { at: 1, of: 7 },
+      { at: 3, of: 7 },
+      { at: 4, of: 7 },
+      { at: 7, of: 7 },
+    ]);
+  });
+
+  test("runs straight to the notes when there is no Side", () => {
+    const biryani = buildDeck(sampleBundle, at("2026-11-22T18:00"));
+
+    expect(outline(biryani).slice(-2)).toEqual(["Vegetable Biryani · Step 7 of 7", "notes: Vegetable Biryani"]);
+    expect(stepScreen(biryani, 7).upcoming).toEqual([]);
+  });
+});
+
+describe("the notes screen", () => {
+  test("holds the notes and source of the dinner and its Side", () => {
+    const deck = buildDeck(sampleBundle, at("2026-11-22T18:00"));
+
+    expect(deck.screens.at(-1)).toEqual({
+      kind: "notes",
+      recipes: [{ title: "Vegetable Biryani", notes: [], source: "https://www.seriouseats.com/vegetable-biryani-5324853" }],
+    });
+    const withSide = buildDeck(sampleBundle, at("2026-11-23T18:00")).screens.at(-1);
+    expect(withSide).toMatchObject({ kind: "notes", recipes: [{ title: "Dahl", source: null }, { title: "Naan", notes: [], source: null }] });
+    expect(withSide?.kind === "notes" && withSide.recipes[0].notes[0]).toMatch(/^Variations: you can vary endlessly/);
+  });
+});
+
+describe("paging", () => {
+  const deck = buildDeck(sampleBundle, at("2026-11-23T18:00"));
+  const pressAll = (keys: string[], from = deck) => keys.reduce(press, from);
+  const last = deck.screens.length - 1;
+
+  test("PageDown, ArrowDown and ArrowRight move one screen forward", () => {
+    expect(pressAll(["PageDown"]).current).toBe(1);
+    expect(pressAll(["ArrowDown"]).current).toBe(1);
+    expect(pressAll(["ArrowRight"]).current).toBe(1);
+    expect(pressAll(["PageDown", "ArrowDown", "ArrowRight"]).current).toBe(3);
+  });
+
+  test("PageUp, ArrowUp and ArrowLeft move one screen back", () => {
+    const fourth = pressAll(["PageDown", "PageDown", "PageDown", "PageDown"]);
+
+    expect(pressAll(["PageUp"], fourth).current).toBe(3);
+    expect(pressAll(["ArrowUp"], fourth).current).toBe(3);
+    expect(pressAll(["ArrowLeft"], fourth).current).toBe(3);
+    expect(pressAll(["PageUp", "ArrowUp", "ArrowLeft"], fourth).current).toBe(1);
+  });
+
+  test("stops at the first and the last screen", () => {
+    expect(pressAll(["PageUp", "ArrowUp"]).current).toBe(0);
+    expect(pressAll(Array(last + 5).fill("PageDown")).current).toBe(last);
+    expect(pressAll([...Array(last + 5).fill("PageDown"), "PageUp"]).current).toBe(last - 1);
+  });
+
+  test("ignores every other key", () => {
+    const second = press(deck, "PageDown");
+
+    for (const key of ["Enter", " ", "Home", "End", "a", "Backspace"]) expect(press(second, key)).toBe(second);
+  });
+
+  test("a deck with one screen stays put", () => {
+    const free = buildDeck(sampleBundle, at("2026-11-27T18:00"));
+
+    expect(pressAll(["PageDown", "ArrowRight", "PageUp"], free).current).toBe(0);
   });
 });

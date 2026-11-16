@@ -4,6 +4,7 @@ import { parse as parseYaml } from "yaml";
 import type { Ingredient, IngredientGroup, MenuDay, Recipe, WeekMenu } from "../bundle/bundle.ts";
 import { addDays } from "../bundle/kitchen-day.ts";
 import { parseAmount } from "./amount.ts";
+import { ingredientWords, markStep } from "./step.ts";
 
 const WEEK_MENUS = "Week menus";
 
@@ -131,15 +132,21 @@ export async function findRecipeNote(vault: string, name: string): Promise<Note 
 }
 
 function parseRecipe(name: string, note: Note): Recipe {
-  const recipe: Recipe = { title: name, ingredients: [] };
+  const source = typeof note.properties.source === "string" && note.properties.source.trim() ? note.properties.source.trim() : null;
+  const recipe: Recipe = { title: name, ingredients: [], method: [], notes: [], source };
+  const steps: string[] = [];
+  const paragraphs: string[][] = [];
   let section: string | null = null;
   let group: IngredientGroup | null = null;
+  /** Where a line that isn't a step or a blank line goes: onto the step above it, or into a notes paragraph. */
+  let continuing: "step" | "paragraph" | null = null;
   for (const line of note.body.split("\n")) {
     let m: RegExpMatchArray | null;
     if ((m = line.match(/^# (.+)/))) recipe.title = m[1].trim();
     else if ((m = line.match(/^## (.+)/))) {
       section = m[1].trim().toLowerCase();
       group = null;
+      continuing = null;
     } else if (section === "ingredients" && (m = line.match(/^### (.+)/))) {
       group = { heading: m[1].trim(), items: [] };
       recipe.ingredients.push(group);
@@ -149,8 +156,28 @@ function parseRecipe(name: string, note: Note): Recipe {
         recipe.ingredients.push(group);
       }
       group.items.push(parseIngredient(note.file, m[1].trim()));
+    } else if (section === "method" || section === "notes") {
+      if (!line.trim()) continuing = null;
+      else if (section === "method" && (m = line.match(/^\d+[.)]\s+(.+)/))) {
+        steps.push(m[1].trim());
+        continuing = "step";
+      } else if (continuing === "step" && /^\s/.test(line)) steps[steps.length - 1] += ` ${line.trim()}`;
+      else if (continuing === "paragraph") paragraphs[paragraphs.length - 1].push(line.trim());
+      else {
+        paragraphs.push([line.trim()]);
+        continuing = "paragraph";
+      }
     }
   }
+  const vocabulary = ingredientWords(recipe.ingredients);
+  recipe.method = steps.map((step) =>
+    markStep(plainText(step), vocabulary, (amount) => {
+      const parsed = parseAmount(amount);
+      if (!parsed) throw new VaultError(`${note.file}: the amount "${amount}" in the Method step "${step}" doesn't start with a number`);
+      return parsed;
+    }),
+  );
+  recipe.notes = paragraphs.map((p) => plainText(p.join(" ")).replace(/\*([^*]+)\*/g, "$1"));
   return recipe;
 }
 
