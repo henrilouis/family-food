@@ -188,14 +188,14 @@ export async function planBasket(vault: string, weekStart: string, input: Basket
   };
 }
 
-type Staple = { name: string; product: number; title: string; quantity: number; kind: "Weekly" | "Ask" };
+type Staple = { name: string; product: number | null; title: string; quantity: number; kind: "Weekly" | "Ask" };
 
 /**
  * The Staples this week's Basket gets: the Weekly Staples, changed by the Week Menu's `## Staples this week`:
  * "- Skip: milk ×1" (one fewer; without ×n none at all), "- Extra: eggs ×1" (more; ×1 without ×n),
  * "- Ask Staples: peanut butter, oats ×2" (chosen Ask Staples; their usual quantity without ×n).
  */
-async function staplesThisWeek(vault: string, weekMenu: Note): Promise<Staple[]> {
+export async function staplesThisWeek(vault: string, weekMenu: Note): Promise<(Staple & { product: number })[]> {
   const staples = await readStaples(vault);
   const chosen = new Map(staples.filter((s) => s.kind === "Weekly").map((s) => [s, s.quantity]));
   for (const line of section(weekMenu.body, "Staples this week")) {
@@ -217,10 +217,18 @@ async function staplesThisWeek(vault: string, weekMenu: Note): Promise<Staple[]>
       else chosen.set(staple, count ?? staple.quantity);
     }
   }
-  return [...chosen].filter(([, quantity]) => quantity > 0).map(([staple, quantity]) => ({ ...staple, quantity }));
+  const bought = [...chosen].filter(([, quantity]) => quantity > 0);
+  const staplesFile = path.join(vault, STAPLES_NOTE);
+  return bought.map(([staple, quantity]) => {
+    if (staple.product === null) throw new NoteError(staplesFile, `the Staple "${staple.name}" has no AH product id`);
+    return { ...staple, product: staple.product, quantity };
+  });
 }
 
-/** The Staples note's table: Staple | AH product (name, webshop id in brackets) | Quantity (packs) | Kind (Weekly or Ask). */
+/**
+ * The Staples note's table: Staple | AH product | AH id | Quantity (packs) | Kind (Weekly or Ask).
+ * The webshop id may also sit in brackets at the end of the AH product cell, without an AH id column.
+ */
 async function readStaples(vault: string): Promise<Staple[]> {
   let note: Note;
   try {
@@ -230,14 +238,13 @@ async function readStaples(vault: string): Promise<Staple[]> {
     throw error;
   }
   return (tableRows(note, "staple") ?? []).map((row) => {
-    const product = row["ah product"]?.match(/\((\d+)\)\s*$/);
+    const product = row["ah id"]?.match(/^\d+$/)?.[0] ?? row["ah product"]?.match(/\((\d+)\)\s*$/)?.[1];
     const quantity = Number(row.quantity);
     const kind = row.kind?.toLowerCase();
-    if (!product) throw new NoteError(note.file, `the Staple "${row.staple}" has no AH product id in brackets`);
     if (!row.quantity || !Number.isFinite(quantity) || quantity < 0) throw new NoteError(note.file, `the Staple "${row.staple}" has no quantity`);
     if (kind !== "weekly" && kind !== "ask") throw new NoteError(note.file, `the Staple "${row.staple}" is neither Weekly nor Ask`);
-    const title = row["ah product"].replace(/\s*\(\d+\)\s*$/, "");
-    return { name: row.staple, product: Number(product[1]), title, quantity, kind: kind === "weekly" ? "Weekly" : "Ask" };
+    const title = (row["ah product"] ?? "").replace(/\s*\(\d+\)\s*$/, "");
+    return { name: row.staple, product: product ? Number(product) : null, title, quantity, kind: kind === "weekly" ? "Weekly" : "Ask" };
   });
 }
 

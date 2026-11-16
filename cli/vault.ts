@@ -111,7 +111,7 @@ export function tableRows(note: Note, column: string): Record<string, string>[] 
 }
 
 /** The note name a cell's wikilink points at: "[[Meals/Dahl#Method|the dahl]]" → "Dahl". */
-function linkTarget(cell: string): string | null {
+export function linkTarget(cell: string): string | null {
   const link = cell.match(/\[\[([^\]|#]+)/);
   return link ? path.basename(link[1].trim()) : null;
 }

@@ -65,6 +65,17 @@ food recipe published "Best Lentil Soup"                                # is it 
 
 `food recipe fetch` says who it is (an honest User-Agent) and never fetches from NYT Cooking, Serious Eats or The Guardian, whose robots.txt blocks AI agents; paste those recipes instead. Allerhande pages aren't supported yet. Under tests it fetches only from local test pages.
 
+## Planning the week
+
+Say "plan the week" to the agent: the `planning-session` skill (`.agents/skills/planning-session/SKILL.md`) reviews last week's Novel Recipe, proposes next week's Week Menu with three Novel Recipe candidates, settles the Staples and, on "lock it", writes the Week Menu, saves the Novel Recipe through `add-recipe`, deletes the honoured Wishes, Publishes and hands off to fill-basket. It replaces the old work vault's `week-menu` skill. The CLI parts it uses:
+
+```sh
+food plan context                          # the week to plan, the Novel Recipe to review, the repeat window, the Meals (JSON)
+food plan verdict 2026-11-21 kept          # kept | rejected | "not cooked"
+food recipe delete "Vegetable Biryani"     # after a confirmed 👎; the Week Menus keep its name as plain text
+food plan write plan.json                  # the Locked Week Menu note
+```
+
 ## Local config
 
 The local config lives in `~/Library/Application Support/family-food/` (`FOOD_CONFIG_DIR` overrides it). `FOOD_NOW` fixes the CLI's clock. The config's `fakes` key swaps an adapter for its fake, which keeps its state as JSON files in the folder given (`{ "fakes": { "ah": "/tmp/x/ah", "apple-notes": "/tmp/x/notes" } }`); the tests use this.

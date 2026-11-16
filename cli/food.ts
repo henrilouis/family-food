@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { AhError, ahGateway, parseAmount } from "./adapters/ah/gateway.ts";
@@ -11,6 +12,7 @@ import { readConfig, writeConfig } from "./config.ts";
 import { fetchRecipePage, RecipePageError, RecipePageRefused } from "./recipe-page.ts";
 import { DisplayTargetError } from "./adapters/display-target.ts";
 import { deploy, DeployRefused } from "./deploy.ts";
+import { deleteRecipe, planContext, PlanInputError, recordVerdict, writeWeekMenu, type WeekPlan } from "./plan.ts";
 import { preview } from "./preview.ts";
 import { publish, UNREACHABLE_MESSAGE } from "./publish.ts";
 import { VaultError } from "./vault.ts";
@@ -67,6 +69,17 @@ Commands:
   recipe published <name> [--json]
                         Name the published Week Menus that link Recipe <name> (as a dinner or a side):
                         if there are any, an edit to it needs \`food publish\`
+  recipe delete <name>  Delete a Recipe (a 👎 Novel Recipe) and turn the Week Menus' links to it into plain text
+  plan context          What a Planning Session needs (JSON): the week to plan (the next Saturday; late once
+                        the Friday before is past 12:00), the Novel Recipe to review, the last 3 Week Menus'
+                        dinners, Novel Recipe sources with a 👎, and every Meal with its properties and when
+                        it was last planned
+  plan verdict <week_start> <kept|rejected|not cooked>
+                        Record the verdict on that Week Menu's Novel Recipe; kept or rejected clears its novel
+  plan write <plan.json>
+                        Write a Locked Week Menu note from the planning-session skill's plan
+                        ({weekStart, novelSource, days: [7 × {dinner, side, novel, double: "cook"|"second"}],
+                        staples: ["Skip: milk ×1"], notes: [...]}); refuses when the note is already there
   deploy                Set up, update or repair the Kitchen Display Pi (ssh host \`kitchen\`)
                         from a clean main that matches origin
 `;
@@ -137,6 +150,38 @@ async function main(args: string[]): Promise<void> {
       return notes(rest);
     case "recipe":
       return recipe(rest);
+    case "plan":
+      return plan(rest);
+    default:
+      throw new UsageError(usage);
+  }
+}
+
+async function plan(args: string[]): Promise<void> {
+  const [command, ...rest] = args;
+  switch (command) {
+    case "context":
+      if (rest.length > 0) throw new UsageError(usage);
+      process.stdout.write(JSON.stringify(await planContext(await vaultPath(), now()), null, 2) + "\n");
+      return;
+    case "verdict": {
+      const [week, ...verdict] = rest;
+      if (!week || verdict.length === 0) throw new UsageError(usage);
+      const done = await recordVerdict(await vaultPath(), week, verdict.join(" "));
+      process.stdout.write(done.map((line) => line + "\n").join(""));
+      return;
+    }
+    case "write": {
+      if (rest.length !== 1) throw new UsageError(usage);
+      let weekPlan: WeekPlan;
+      try {
+        weekPlan = JSON.parse(await readFile(path.resolve(rest[0]), "utf8"));
+      } catch (error) {
+        throw new PlanInputError(`${rest[0]} is not a JSON plan: ${(error as Error).message}`);
+      }
+      process.stdout.write(`Wrote ${await writeWeekMenu(await vaultPath(), weekPlan)}\n`);
+      return;
+    }
     default:
       throw new UsageError(usage);
   }
@@ -198,6 +243,12 @@ async function recipe(args: string[]): Promise<void> {
         const menus = weekMenus.length === 1 ? `Week Menu of ${weekMenus[0]}` : `Week Menus of ${weekMenus.join(", ")}`;
         process.stdout.write(`${name} is on the published ${menus}: run \`food publish\`.\n`);
       }
+      return;
+    }
+    case "delete": {
+      if (rest.length !== 1) throw new UsageError(usage);
+      const done = await deleteRecipe(await vaultPath(), rest[0]);
+      process.stdout.write(done.map((line) => line + "\n").join(""));
       return;
     }
     case "fetch": {
@@ -271,7 +322,7 @@ async function basket(args: string[]): Promise<void> {
 }
 
 main(process.argv.slice(2)).catch((error) => {
-  const expected = [UsageError, VaultError, DeployRefused, DisplayTargetError, AhError, AppleNotesError, BasketInputError].some(
+  const expected = [UsageError, VaultError, DeployRefused, DisplayTargetError, AhError, AppleNotesError, BasketInputError, PlanInputError].some(
     (type) => error instanceof type,
   );
   process.stderr.write(expected ? error.message.trimEnd() + "\n" : `${error.stack ?? error}\n`);
