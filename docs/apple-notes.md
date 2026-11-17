@@ -16,7 +16,7 @@ The partner takes part through three notes in the shared Apple Notes folder "Fam
 
 ## When Notes won't take a change
 
-It is unconfirmed whether AppleScript can write to a note shared by another Apple ID. When a write fails:
+It is unconfirmed whether AppleScript can write to a note shared by another Apple ID. Writes to notes owned by this Mac's Apple ID and shared with the partner work, including deleting lines the partner added (checked on macOS 26.7.3, #25). When a write fails:
 
 - `delete` / `remove` delete nothing, exit **2** and print what to delete by hand. With `--json`:
   ```json
