@@ -1,11 +1,12 @@
 # ahdump
 
-The `food` CLI's way into Albert Heijn's unofficial app API. A small Go tool on [appie-go](https://github.com/gwillem/appie-go), pinned to edeckers' fork at [`cef776a`](https://github.com/edeckers/appie-go/commit/cef776a) because that commit fixes the 6 November 2026 login change ([gwillem/appie-go#34](https://github.com/gwillem/appie-go/issues/34)) and is not merged upstream (see `go.mod`). It started as the throwaway purchase-history pull on `task/ah-purchase-history` (#6).
+The `food` CLI's way into Albert Heijn's unofficial app API. A small Go tool on [appie-go](https://github.com/gwillem/appie-go), built against a patched copy of edeckers' fork at [`cef776a`](https://github.com/edeckers/appie-go/commit/cef776a) in `third_party/appie-go/`. That commit fixes the 6 November 2026 login change ([gwillem/appie-go#34](https://github.com/gwillem/appie-go/issues/34)) and isn't merged upstream; the patch handles the 20 November 2026 one (see `third_party/appie-go/NOTICE.md`). It started as the throwaway purchase-history pull on `task/ah-purchase-history` (#6).
 
 The CLI runs it through the AH gateway (`cli/adapters/ah/`); you rarely need to call it yourself.
 
 ```sh
 npm run build:ahdump          # needs Go; writes ahdump/ahdump (git-ignored)
+(cd ahdump/third_party/appie-go && go test ./...)   # the patched login's tests
 ```
 
 ## Commands
@@ -41,7 +42,7 @@ The tests only cover the CLI against the fake AH. After a change here, or when A
 
 1. `npm run build:ahdump`
 2. Anonymous search, before logging in: `FOOD_CONFIG_DIR="$(mktemp -d)" food ah search kikkererwten --need 400g`. Expect JSON with no sponsored products, the cheapest per kg first, the AH house brand first on a tie, and `previouslyBought: false` everywhere. Compare a few prices with the AH app.
-3. `food ah login`. The AH login page opens in your browser; log in. The terminal prints `Logged in to AH.`
+3. `food ah login`. The AH login page opens in your browser; log in. The browser goes on to "Login successful" (or, should AH's page not follow, stays on a page reading "redirect": close it), and the terminal prints `Logged in to AH.`
 4. `ls -l ~/Library/Application\ Support/family-food/ah-token.json` shows `-rw-------`.
 5. `food ah search griekse yoghurt`. Products you buy show `previouslyBought: true`.
 6. `food ah bought melk`. Lists milk you have bought before, the one you buy most first.
