@@ -167,18 +167,26 @@ func (a *ah) anonymousClient(ctx context.Context) (*appie.Client, error) {
 	return a.client(appie.WithTokens(t.AccessToken, "")), nil
 }
 
+// anonymous runs request with the anonymous token. AH can drop that token long before it expires (seen on
+// 2026-11-20, 4 days into its 7), so on a 401 it gets a new one and tries once more.
+func (a *ah) anonymous(ctx context.Context, request func(*appie.Client) error) error {
+	for retried := false; ; retried = true {
+		c, err := a.anonymousClient(ctx)
+		if err != nil {
+			return err
+		}
+		err = request(c)
+		if err == nil || retried || a.transport.lastStatus() != http.StatusUnauthorized {
+			return err
+		}
+		if err := os.Remove(a.anonFile); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+}
+
 // search returns AH's REST product search results as AH sends them.
 func (a *ah) search(ctx context.Context, query string, user bool, sortOn string, size int) ([]json.RawMessage, error) {
-	var c *appie.Client
-	var err error
-	if user {
-		c, err = a.userClient(ctx)
-	} else {
-		c, err = a.anonymousClient(ctx)
-	}
-	if err != nil {
-		return nil, err
-	}
 	params := url.Values{}
 	params.Set("query", query)
 	params.Set("page", "0")
@@ -187,11 +195,26 @@ func (a *ah) search(ctx context.Context, query string, user bool, sortOn string,
 	var result struct {
 		Products []json.RawMessage `json:"products"`
 	}
-	if err := c.DoRequest(ctx, http.MethodGet, "/mobile-services/product/search/v2?"+params.Encode(), nil, &result); err != nil {
-		if user && a.transport.lastStatus() == http.StatusUnauthorized {
-			return nil, fmt.Errorf("%w (%v)", errLogin, err)
+	request := func(c *appie.Client) error {
+		if err := c.DoRequest(ctx, http.MethodGet, "/mobile-services/product/search/v2?"+params.Encode(), nil, &result); err != nil {
+			if user && a.transport.lastStatus() == http.StatusUnauthorized {
+				return fmt.Errorf("%w (%v)", errLogin, err)
+			}
+			return a.downError("search failed", err)
 		}
-		return nil, a.downError("search failed", err)
+		return nil
+	}
+	var err error
+	if user {
+		var c *appie.Client
+		if c, err = a.userClient(ctx); err == nil {
+			err = request(c)
+		}
+	} else {
+		err = a.anonymous(ctx, request)
+	}
+	if err != nil {
+		return nil, err
 	}
 	if result.Products == nil {
 		result.Products = []json.RawMessage{}

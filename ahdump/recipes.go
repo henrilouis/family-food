@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	appie "github.com/gwillem/appie-go"
 )
 
 // Allerhande recipe search, with the fields the family-food CLI reads (albertheijn-mcp's FetchRecipes, checked
@@ -136,14 +138,12 @@ func recipeID(command string, args []string) (int, error) {
 
 // anonymousGraphQL runs a GraphQL query with the anonymous token; AH not answering is errDown.
 func (a *ah) anonymousGraphQL(ctx context.Context, doing, query string, variables map[string]any, result any) error {
-	c, err := a.anonymousClient(ctx)
-	if err != nil {
-		return err
-	}
-	if err := c.DoGraphQL(ctx, query, variables, result); err != nil {
-		return a.downError(doing, err)
-	}
-	return nil
+	return a.anonymous(ctx, func(c *appie.Client) error {
+		if err := c.DoGraphQL(ctx, query, variables, result); err != nil {
+			return a.downError(doing, err)
+		}
+		return nil
+	})
 }
 
 func orEmptyList(raw json.RawMessage) json.RawMessage {

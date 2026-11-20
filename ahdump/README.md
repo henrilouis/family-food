@@ -32,7 +32,7 @@ Exit codes: 0 done, 1 failed, 3 not logged in or AH refused the login (`food ah 
 
 - One `ahdump` at a time (a lock file next to the token): AH rotates the refresh token on every renewal, so two processes renewing at once would log the household out.
 - At least 1 s between requests, also across runs, and an honest User-Agent (`family-food-ahdump/0.1 (personal household use; …)`).
-- An anonymous token (about 7 days) is kept next to the user token and reused for anonymous searches.
+- An anonymous token (about 7 days) is kept next to the user token and reused for anonymous searches. AH can drop it sooner: on a 401 ahdump gets a new one and tries once more.
 - It only adds to Mijn lijst: it never removes anything and never checks out. Run it from home (residential IP) and keep the volume low.
 
 ## Checking it by hand against the live API
