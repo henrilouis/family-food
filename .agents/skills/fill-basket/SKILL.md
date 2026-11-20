@@ -35,7 +35,7 @@ Done when you have the JSON, the Staples, the Allerhande sources and any earlier
 
 ### 3. Match every line
 
-Every line with `optional: false` gets one entry. Optional lines get none: the CLI never buys them and lists them.
+Every line with `optional: false` gets one entry. An optional line gets an entry only when the adult asked for it (step 4), built like any other; the CLI buys an optional line with an entry and lists the others as "Optional, not added".
 
 - A line with a complete `match` (a number or no `packFraction` field): take it as it is.
 - A `match` with `packFraction: null`: fill in the pack fraction.
@@ -61,7 +61,7 @@ One message, before anything is written. Leave out a part that is empty; when ev
 
 1. **New matches**: each new match on one line: ingredient (Recipe) → AH title, pack price, estimated packs this week, the kind, and how you found it (Allerhande suggestion / bought before / cheapest per kg / nothing at AH, added as a note). Lines that share a product go on one line.
 2. **Cupboard Ingredients this week**, pinned and new, those with a product: "Which of these are at home?" When the note already has a `## Basket` section (a run after an earlier one), ask only about Cupboard Ingredients it doesn't cover: leave out those in its product lines (`(id <id>)`) and those its `Have at home:` line names.
-3. **Optional, not added**: each optional line with its Recipe; added only if the adult names it.
+3. **Optional, not added**: each optional line with its Recipe; added only if the adult names it. For each one named, match it as in step 3 when you apply the reply (step 5) and give it an entry; name the product you took in the report (step 7).
 
 End with: "Reply with corrections, what's at home and anything Always in House that's running low, or 'ok'."
 

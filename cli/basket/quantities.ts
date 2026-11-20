@@ -47,7 +47,7 @@ export type BasketPlan = {
   products: PlannedProduct[];
   /** Ingredients and Staples with no AH product, as free-text notes for Mijn lijst: "lime leaves (25)", "Tea (Staple ×1)". */
   notes: string[];
-  /** Optional lines, not bought: "Tacos: 8 tortilla wraps (optional)". */
+  /** Optional lines the list has no entry for, not bought: "Tacos: 8 tortilla wraps (optional)". */
   optional: string[];
   /** The Cupboard Ingredients left out because they are at home, by ingredient name. */
   haveAtHome: string[];
@@ -57,7 +57,8 @@ export type BasketPlan = {
 
 /**
  * Works out what the Locked Week Menu starting on `weekStart` needs from AH: each ingredient line as written,
- * ×2 on a Double cook day, nothing for a Double 2nd day, the Free Day or optional lines; plus the Staples;
+ * ×2 on a Double cook day, nothing for a Double 2nd day or the Free Day, nor for an optional line the list has no
+ * entry for (an entry means the adult asked for it); plus the Staples;
  * summed per product, then rounded to whole packs; without Always in House items and what is at home.
  */
 export async function planBasket(vault: string, weekStart: string, input: BasketInput): Promise<BasketPlan> {
@@ -77,7 +78,7 @@ export async function planBasket(vault: string, weekStart: string, input: Basket
     const name = ingredientName(ingredient.text);
     const match = input.lines.find((m) => sameRecipe(m.recipe, recipeName) && sameLine(m.line, line));
     if (match) used.add(match);
-    if (isOptional) {
+    if (isOptional && !match) {
       optional.add(`${recipeName}: ${line}`);
       continue;
     }

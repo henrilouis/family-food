@@ -346,12 +346,12 @@ describe("food basket fill", () => {
     expect(result.stdout).toContain("Unmatched, added as notes:\n- lime leaves (25)\n- adobo peppers (2)\n");
   });
 
-  test("doesn't buy optional lines but lists them", async () => {
+  test("buys an optional line only when the list has an entry for it, and lists the others", async () => {
     const box = await basketBox([
       { webshopId: 1, title: "AH Avocado", priceBeforeBonus: 1.29 },
       { webshopId: 2, title: "AH Tortilla wraps 8 stuks", priceBeforeBonus: 1.99 },
     ]);
-    await box.recipe("Tacos", ["*1* avocado", "*8* tortilla wraps (optional)", "sour cream if you like"]);
+    await box.recipe("Tacos", ["*1* avocado", "*8* tortilla wraps (optional)", "sour cream if you like", "chilli flakes (optional)"]);
     await box.weekMenu([["Tacos", "", ""]]);
 
     const result = await box.fill([
@@ -361,8 +361,8 @@ describe("food basket fill", () => {
 
     expect(result.stderr).toBe("");
     expect(result.code).toBe(0);
-    expect(quantities(await box.basket())).toEqual({ 1: 1 });
-    expect(result.stdout).toContain("Optional, not added:\n- Tacos: 8 tortilla wraps (optional)\n- Tacos: sour cream if you like\n");
+    expect(quantities(await box.basket())).toEqual({ 1: 1, 2: 1 });
+    expect(result.stdout).toContain("Optional, not added:\n- Tacos: sour cream if you like\n- Tacos: chilli flakes (optional)\n");
   });
 
   test("reports what was added, already there, unmatched and optional, the estimated total, and the checkout reminder", async () => {

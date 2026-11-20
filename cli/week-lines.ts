@@ -1,7 +1,7 @@
 import type { Ingredient } from "../bundle/bundle.ts";
 import { findRecipeNote, parseRecipe, parseWeekMenu, readWeekMenuNotes, VaultError, WEEK_MENUS, weekStartOf, type Note } from "./vault.ts";
 
-/** An ingredient line that isn't bought: "Wraps if you want", "chilli flakes (optional)". */
+/** An ingredient line that isn't bought unless an adult asks for it: "Wraps if you want", "chilli flakes (optional)". */
 const OPTIONAL = /\boptional\b|\bif you (?:want|like)\b/i;
 
 /** An ingredient line of a Recipe or Side the Week Menu buys, and the number of dinners it is bought for. */
@@ -11,7 +11,7 @@ export type WeekLine = {
   ingredient: Ingredient;
   /** 1 per day it is on, 2 on a Double cook day (a Double 2nd day buys nothing). */
   times: number;
-  /** "Wraps if you want", "chilli flakes (optional)": never bought. */
+  /** "Wraps if you want", "chilli flakes (optional)": bought only when the Matches have an entry for it. */
   optional: boolean;
 };
 
