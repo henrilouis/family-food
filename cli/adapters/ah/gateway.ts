@@ -1,6 +1,6 @@
 import { access, chmod, mkdir } from "node:fs/promises";
 import path from "node:path";
-import { inWeek } from "../../../bundle/dates.ts";
+import { inWeek } from "../../dates.ts";
 import { configDir, type Config } from "../../config.ts";
 import { ahdumpClient } from "./ahdump.ts";
 import type { RecipePage } from "../../recipe-page.ts";

@@ -408,7 +408,7 @@ describe("food basket fill", () => {
     );
   });
 
-  test("records what it added in the Week Menu's Basket section, which the display bundle ignores", async () => {
+  test("records what it added in the Week Menu's Basket section, which the vault check ignores", async () => {
     const box = await basketBox([
       { webshopId: 1, title: "AH Spaghetti 500 g", priceBeforeBonus: 1.29 },
       { webshopId: 2, title: "AH Eieren 10 stuks", priceBeforeBonus: 3.49 },
@@ -417,7 +417,6 @@ describe("food basket fill", () => {
     await box.staples([["Eggs", "AH Eieren 10 stuks (2)", 1, "Weekly"]]);
     await box.recipe("Carbonara", ["*500g* spaghetti, broken in half", "*3* eggs", "*50g* pine nuts", "*10* basil leaves"]);
     await box.weekMenu([["Carbonara", "", "Double: cook"], ["Carbonara", "", "Double: 2nd day"]], ["Extra: eggs ×1"]);
-    const bundleBefore = await box.run(["bundle"], { now: "2026-11-28T10:00" });
 
     const result = await box.fill(
       [
@@ -442,7 +441,7 @@ describe("food basket fill", () => {
         "",
       ].join("\n"),
     );
-    expect(await box.run(["bundle"], { now: "2026-11-28T10:00" })).toEqual(bundleBefore);
+    expect((await box.run(["vault", "check", "--published"], { now: "2026-11-28T10:00" })).code).toBe(0);
   });
 
   test("refuses a list that misses an ingredient line or names one that isn't on the Week Menu, and writes nothing", async () => {

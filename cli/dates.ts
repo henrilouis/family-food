@@ -1,4 +1,4 @@
-// Calendar dates as YYYY-MM-DD, and as people read them. Used on the Mac and on the Kitchen Display page.
+// Calendar dates as YYYY-MM-DD, and as people read them.
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { Amount, Ingredient } from "../bundle/bundle.ts";
+import type { Amount, Ingredient } from "./model.ts";
 import { measureOf, parseMeasure } from "./amount.ts";
 import type { Match } from "./basket/quantities.ts";
 import { ingredientName, KINDS, sameIngredient, type Kind } from "./ingredient.ts";

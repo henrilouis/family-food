@@ -1,9 +1,9 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import type { MenuDay } from "../bundle/bundle.ts";
-import { dayLabel } from "../bundle/dates.ts";
+import type { MenuDay } from "./model.ts";
+import { dayLabel } from "./dates.ts";
 import { parseRecipeAmount } from "./amount.ts";
-import { isPublished } from "./build-bundle.ts";
+import { isPublished } from "./published.ts";
 import { findRecipeNote, linkTarget, NoteError, parseRecipe, parseWeekMenu, readNotes, readWeekMenuNotes, RECIPE_FOLDERS, weekStartOf, type Note } from "./vault.ts";
 
 /** A format problem in one Recipe Vault note. `file` is relative to the vault, e.g. "Meals/Dahl.md". */
@@ -149,7 +149,7 @@ function amountProblems(note: Note): string[] {
     }
   }
   if (problems.length > 0) return problems;
-  // Whatever else would stop the display bundle from reading this Recipe.
+  // Whatever else would stop the CLI from reading this Recipe.
   try {
     parseRecipe(path.basename(note.file, ".md"), note);
   } catch (e) {

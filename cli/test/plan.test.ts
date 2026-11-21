@@ -216,7 +216,7 @@ describe("food plan write", () => {
   };
 
   test("writes the Locked Week Menu note named after its Saturday, which passes the check once the Novel Recipe is saved", async () => {
-    const { run, vault } = await sandbox();
+    const { run, vault, fake } = await sandbox();
 
     const result = await run(["plan", "write", await writePlan(vault, plan)]);
     await meal(vault, "Shakshuka", "---\ncuisine: Middle Eastern\nnovel: true\n---\n# Shakshuka\n");
@@ -254,11 +254,11 @@ describe("food plan write", () => {
       ].join("\n"),
     );
     expect((await run(["vault", "check"])).code).toBe(0);
-    const bundle = JSON.parse((await run(["bundle"], { now: "2026-11-28T10:00" })).stdout);
-    expect(bundle.weekMenus.find((w: { weekStart: string }) => w.weekStart === "2026-11-28").days.slice(1, 3)).toEqual([
-      { date: "2026-11-29", dinner: "Shakshuka", side: null, novel: true, double: null },
-      { date: "2026-11-30", dinner: "Dahl", side: "Naan", novel: false, double: "cook" },
-    ]);
+    const notes = await fake("apple-notes");
+    expect((await run(["publish"], { now: "2026-11-28T10:00" })).code).toBe(0);
+    const thisWeek = JSON.parse(await readFile(path.join(notes, "notes.json"), "utf8"))["This week"];
+    expect(thisWeek).toContain("Sun 29 Nov: Shakshuka (new recipe)");
+    expect(thisWeek).toContain("Mon 30 Nov: Dahl with Naan (cook double)");
   });
 
   test("a Novel Recipe cooked as a Double, and a week without one", async () => {

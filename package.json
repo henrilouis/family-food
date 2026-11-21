@@ -15,12 +15,10 @@
     "typecheck": "tsc"
   },
   "dependencies": {
-    "esbuild": "^0.28.2",
     "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
-    "playwright-core": "^1.65.1",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0"
   }

@@ -220,7 +220,7 @@ describe("food vault check", () => {
       expect(whole.stdout).toContain("Pasta Pesto.md");
     });
 
-    test("still checks last week's Week Menu on Friday, while the Kitchen Display shows it", async () => {
+    test("still checks last week's Week Menu on Friday, while This week shows it", async () => {
       const { run, vault } = await sandbox();
       await edit(vault, "Week menus/Week 2026-11-14.md", "[[Naan]]", "[[Roti]]");
 

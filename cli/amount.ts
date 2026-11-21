@@ -1,6 +1,6 @@
-// Two kinds of amount: a Recipe's italic amount as written ("2½ tsp", "1 tin (400 g)"), which the display bundle
-// carries and doubles, and a Measure in g, ml or pieces, which compares a Recipe's amount with an AH pack size.
-import type { Amount } from "../bundle/bundle.ts";
+// Two kinds of amount: a Recipe's italic amount as written ("2½ tsp", "1 tin (400 g)"), which scales on a Double cook
+// day, and a Measure in g, ml or pieces, which compares a Recipe's amount with an AH pack size.
+import type { Amount } from "./model.ts";
 
 const FRACTIONS: Record<string, number> = { "½": 1 / 2, "¼": 1 / 4, "¾": 3 / 4, "⅓": 1 / 3, "⅔": 2 / 3, "⅛": 1 / 8 };
 const FRACTION_CHARS = Object.keys(FRACTIONS).join("");

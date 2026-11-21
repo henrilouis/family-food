@@ -6,12 +6,13 @@ import path from "node:path";
 export type Config = {
   vault?: string;
   /** Adapters replaced by their local-folder fake, by adapter name (see `cli/adapters/`). No key → the real adapter. */
-  fakes?: { ah?: string; "display-target"?: string; "apple-notes"?: string };
+  fakes?: { ah?: string; "apple-notes"?: string; obsidian?: string };
 };
 
 /**
  * Set for every test, and the CLI processes they start, by `vitest.config.ts`: the real AH, Apple Notes and recipe
  * sites off this Mac refuse, so a test that forgets its fake can't reach the household's accounts or the web.
+ * The Obsidian check counts the app as running.
  */
 export const fakesOnly = () => process.env.FOOD_FAKES_ONLY === "1";
 

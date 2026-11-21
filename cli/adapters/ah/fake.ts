@@ -1,6 +1,6 @@
 import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { addDays } from "../../../bundle/dates.ts";
+import { addDays } from "../../dates.ts";
 import {
   AhError,
   AhLoginError,

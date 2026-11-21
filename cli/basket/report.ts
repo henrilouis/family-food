@@ -1,4 +1,4 @@
-import { dayLabel, timeLabel } from "../../bundle/dates.ts";
+import { dayLabel, timeLabel } from "../dates.ts";
 import { filledBefore, unchanged, type BasketChange, type BasketOutcome } from "./fill.ts";
 import { productTitle, type BasketPlan, type PlannedProduct, type ShoppingGroup } from "./quantities.ts";
 

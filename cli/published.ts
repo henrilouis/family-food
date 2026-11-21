@@ -1,24 +1,25 @@
-import { BUNDLE_SCHEMA_VERSION, type DisplayBundle, type Recipe } from "../bundle/bundle.ts";
-import { addDays } from "../bundle/dates.ts";
-import { kitchenDate } from "../bundle/kitchen-day.ts";
+import type { WeekMenu } from "./model.ts";
+import { addDays, localDate } from "./dates.ts";
 import { readRecipe, readWeekMenus } from "./vault.ts";
 
-export async function buildBundle(vault: string, now: Date): Promise<DisplayBundle> {
+/** What a Publish sends: the Week Menus, and the title of each Recipe and Side they link to, by the name linked. */
+export type Published = {
+  weekMenus: WeekMenu[];
+  titles: Record<string, string>;
+};
+
+/** The Week Menus a Publish at `now` sends (see `isPublished`), oldest first, with their Recipes' titles. */
+export async function readPublished(vault: string, now: Date): Promise<Published> {
   const weekMenus = (await readWeekMenus(vault)).filter((week) => isPublished(week.weekStart, now));
   const names = new Set(weekMenus.flatMap((week) => week.days.flatMap((day) => [day.dinner, day.side])));
-  const recipes: Record<string, Recipe> = {};
-  for (const name of [...names].filter((n) => n !== null).sort()) recipes[name] = await readRecipe(vault, name);
-  return {
-    schemaVersion: BUNDLE_SCHEMA_VERSION,
-    publishedAt: now.toISOString(),
-    weekMenus,
-    recipes,
-  };
+  const titles: Record<string, string> = {};
+  for (const name of [...names].filter((n) => n !== null).sort()) titles[name] = (await readRecipe(vault, name)).title;
+  return { weekMenus, titles };
 }
 
 /** Whether a Publish at `now` sends the Week Menu starting on `weekStart`: it ends on or after today. */
 export function isPublished(weekStart: string, now: Date): boolean {
-  return addDays(weekStart, 6) >= kitchenDate(now);
+  return addDays(weekStart, 6) >= localDate(now);
 }
 
 /** The `week_start` of each Week Menu a Publish at `now` sends that links Recipe `name`, as a dinner or a side. */

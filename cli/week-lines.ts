@@ -1,4 +1,4 @@
-import type { Ingredient } from "../bundle/bundle.ts";
+import type { Ingredient } from "./model.ts";
 import { findRecipeNote, parseRecipe, parseWeekMenu, readWeekMenuNotes, VaultError, WEEK_MENUS, weekStartOf, type Note } from "./vault.ts";
 
 /** An ingredient line that isn't bought unless an adult asks for it: "Wraps if you want", "chilli flakes (optional)". */

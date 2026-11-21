@@ -1,4 +1,4 @@
-import { inWeek } from "../../bundle/dates.ts";
+import { inWeek } from "../dates.ts";
 import { AhError, AhLoginError, AhUnavailableError } from "../adapters/ah/client.ts";
 import type { AhGateway, OrderInFocus } from "../adapters/ah/gateway.ts";
 import { productTitle, type BasketPlan, type PlannedProduct } from "./quantities.ts";

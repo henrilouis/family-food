@@ -4,21 +4,19 @@ import { parseArgs } from "node:util";
 import { allerhandeRecipeId } from "./adapters/ah/allerhande.ts";
 import { ahGateway } from "./adapters/ah/gateway.ts";
 import { familyNotes, FOOD_WISHES, RECIPES_TO_ADD, type Deletion } from "./adapters/apple-notes/notes.ts";
+import { obsidianWarning } from "./adapters/obsidian.ts";
 import { parseMeasure } from "./amount.ts";
 import { exitCode, fillBasket } from "./basket/fill.ts";
 import { planBasket, readBasketInput } from "./basket/quantities.ts";
 import { formatReport } from "./basket/report.ts";
 import { writeBasketSection } from "./basket/section.ts";
-import { buildBundle, publishedWeekMenusWith } from "./build-bundle.ts";
-import { writeBundleFiles } from "./bundle-files.ts";
 import { checkVault, formatCheck } from "./check.ts";
 import { readConfig, writeConfig } from "./config.ts";
-import { deploy } from "./deploy.ts";
 import { readJsonFile } from "./json-file.ts";
 import { listBasketLines, PinInputError, pinProducts, type PinnedProduct } from "./pinned-products.ts";
 import { deleteRecipe, planContext, recordVerdict, siteTrackRecord, writeWeekMenu, type LockedWeekMenu } from "./plan.ts";
-import { preview } from "./preview.ts";
-import { publish, UNREACHABLE_MESSAGE } from "./publish.ts";
+import { publish } from "./publish.ts";
+import { publishedWeekMenusWith } from "./published.ts";
 import { fetchRecipePage, RecipePageError, RecipePageRefused } from "./recipe-page.ts";
 import { UserError } from "./user-error.ts";
 
@@ -31,15 +29,9 @@ Commands:
                         Check the Recipe Vault's format: errors (exit 1, block Publish) and warnings.
                         --published checks only the Week Menus and Recipes a Publish would send;
                         --json prints {"errors": [...], "warnings": [...]} with {file, message} items
-  bundle [--out <dir>]  Print the display bundle as JSON, or write it to <dir> as bundle.json
-                        with version.json (its content hash) next to it
-  preview [--port <n>] [--lan]
-                        Serve the Kitchen Display page and a fresh bundle on this Mac
-                        (port 8787 by default; --lan to open it on other devices too)
-  publish               Send the current and upcoming Week Menus to the Kitchen Display Pi:
-                        vault check (errors stop it, exit 1), bundle, new release, keep the last 3,
-                        then rewrite the "This week" Apple Note (a failure there warns, exit stays 0).
-                        Prints "${UNREACHABLE_MESSAGE}" and exits 0 when the Pi is out of reach
+  publish               Send the current and upcoming Week Menus to the shared "This week" Apple Note:
+                        vault check (errors stop it, exit 1), then rewrite the note (a failure there warns,
+                        exit stays 0)
   ah login              Log in to Albert Heijn in your browser (once; the token stays on this Mac)
   ah refresh            Renew the AH login now (says so when you need to log in again)
   ah search <query> [--need <amount>]
@@ -105,8 +97,9 @@ Commands:
                         Write a Locked Week Menu note from the planning-session skill's JSON
                         ({weekStart, novelSource, days: [7 × {dinner, side, novel, double: "cook"|"second"}],
                         staples: ["Skip: milk ×1"], notes: [...]}); refuses when the note is already there
-  deploy                Set up, update or repair the Kitchen Display Pi (ssh host \`kitchen\`)
-                        from a clean main that matches origin
+
+plan context, basket lines and publish warn (on stderr; publish on stdout) when Obsidian isn't running on this Mac:
+Obsidian Sync only syncs the Recipe Vault while it runs.
 `;
 
 class UsageError extends UserError {}
@@ -121,6 +114,12 @@ async function vaultPath(): Promise<string> {
   const { vault } = await readConfig();
   if (!vault) throw new UsageError("No Recipe Vault set. Run `food config vault <path>` first.");
   return vault;
+}
+
+/** On stderr, so the JSON on stdout stays whole. */
+async function warnWithoutObsidian(): Promise<void> {
+  const warning = await obsidianWarning(await readConfig());
+  if (warning) process.stderr.write(warning + "\n");
 }
 
 async function main(args: string[]): Promise<void> {
@@ -149,26 +148,6 @@ async function main(args: string[]): Promise<void> {
       if (check.errors.length > 0) process.exitCode = 1;
       return;
     }
-    case "bundle": {
-      const { values } = parseArgs({ args: rest, options: { out: { type: "string" } } });
-      const bundle = await buildBundle(await vaultPath(), now());
-      if (values.out) await writeBundleFiles(path.resolve(values.out), bundle);
-      else printJson(bundle);
-      return;
-    }
-    case "preview": {
-      const { values } = parseArgs({
-        args: rest,
-        options: { port: { type: "string", default: "8787" }, lan: { type: "boolean", default: false } },
-      });
-      const port = Number(values.port);
-      if (!Number.isInteger(port) || port < 0) throw new UsageError(`--port must be a port number, not "${values.port}"`);
-      preview({ vault: await vaultPath(), port, lan: values.lan, now });
-      return;
-    }
-    case "deploy":
-      await deploy((line) => line && printLines([line]));
-      return;
     case "publish":
       if (!(await publish(await vaultPath(), now(), (line) => printLines([line])))) process.exitCode = 1;
       return;
@@ -202,6 +181,7 @@ async function plan(args: string[]): Promise<void> {
   switch (command) {
     case "context":
       if (rest.length > 0) throw new UsageError(usage);
+      await warnWithoutObsidian();
       printJson(await planContext(await vaultPath(), now()));
       return;
     case "sites":
@@ -372,6 +352,7 @@ async function basket(args: string[]): Promise<void> {
   if (command === "lines") {
     const { values, positionals } = parseArgs({ args: rest, allowPositionals: true, options: { week: { type: "string" } } });
     if (positionals.length !== 0 || !values.week) throw new UsageError(usage);
+    await warnWithoutObsidian();
     printJson(await listBasketLines(await vaultPath(), values.week));
     return;
   }
