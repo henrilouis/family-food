@@ -1,16 +1,13 @@
 # Family food
 
-The household's dinner planning, Albert Heijn Basket and Kitchen Display. See `GLOSSARY.md` for the vocabulary and `docs/adr/` for the main decisions.
+The household's dinner planning and Albert Heijn Basket. The Recipe Vault syncs with Obsidian Sync to the iPhone and to the Boox in the kitchen, which opens it in Obsidian (ADR 0003). See `GLOSSARY.md` for the vocabulary and `docs/adr/` for the main decisions.
 
 ## Layout
 
 - `cli/`: the `food` CLI (TypeScript, run directly by Node ≥ 24)
-- `display/`: the Kitchen Display page
-- `bundle/`: the display bundle's shared type definition, used by both
 - `ahdump/`: the AH client, a Go tool on appie-go that the CLI runs (see `ahdump/README.md`)
-- `pi/`: the Kitchen Display Pi's setup script and Caddy config, run and uploaded by `food deploy`
-- `samples/`: a small sample Recipe Vault, the sample bundles built from it, and sample fill-basket matches (`samples/basket/`), used by the tests
-- `docs/pi-setup.md` and `docs/boox-setup.md`: flashing the Kitchen Display Pi and the Boox setup checklist
+- `samples/`: a small sample Recipe Vault and sample fill-basket matches (`samples/basket/`), used by the tests
+- `docs/obsidian-sync-setup.md`: moving the vault to Obsidian Sync, and setting up the iPhone and the Boox
 - `docs/meal-properties.md`: the Meal properties and the fixed `cuisine` and `base` lists, which `food vault check` reads
 - `docs/apple-notes.md`: the shared "Family food" Apple Notes, the `food notes` commands and the checks to do by hand
 - `docs/backfill.md`: how the real recipes were moved into the Recipes vault, and what was decided on the way
@@ -20,10 +17,11 @@ The household's dinner planning, Albert Heijn Basket and Kitchen Display. See `G
 ```sh
 npm install
 npm link                                  # puts `food` on your PATH
-food config vault "<path to the Recipes vault>"
-food preview                              # http://localhost:8787/
-food publish                              # after editing in Obsidian: send the Week Menus to the Kitchen Display
+food config vault ~/Obsidian/Recipes
+food publish                              # after editing in Obsidian: send the Week Menus to the This week note
 ```
+
+Keep Obsidian open on the Mac while working: Obsidian Sync only syncs while it runs. `food plan context`, `food basket lines` and `food publish` warn when it doesn't.
 
 ## Albert Heijn
 
@@ -61,7 +59,7 @@ food notes wishes delete "Pasta pesto" --json  # exit 2 + "deleteByHand" when No
 food notes recipes-to-add --json               # URLs and pasted recipes in "Recipes to add"
 ```
 
-`food publish` also rewrites the "This week" note. See `docs/apple-notes.md`, including the checks to do by hand against the real shared folder.
+`food publish` rewrites the "This week" note. See `docs/apple-notes.md`, including the checks to do by hand against the real shared folder.
 
 ## Adding recipes
 
@@ -83,19 +81,13 @@ food plan context                          # the week to plan, the Novel Recipe 
 food plan verdict 2026-11-21 kept          # kept | rejected | "not cooked"
 food plan sites                            # each recipe site's Novel Recipes kept / rejected / not cooked, and its Meals (JSON)
 food recipe delete "Vegetable Biryani"     # after a confirmed 👎; the Week Menus keep its name as plain text,
-                                           # which the Kitchen Display and This week show as "Vegetable Biryani (deleted)"
+                                           # which This week shows as "Vegetable Biryani (deleted)"
 food plan write week-menu.json             # the Locked Week Menu note
 ```
 
 ## Local config
 
-The local config lives in `~/Library/Application Support/family-food/` (`FOOD_CONFIG_DIR` overrides it). `FOOD_NOW` fixes the CLI's clock. The config's `fakes` key swaps an adapter for its fake, which keeps its state as JSON files in the folder given (`{ "fakes": { "ah": "/tmp/x/ah", "apple-notes": "/tmp/x/notes" } }`); the tests use this.
-
-## Kitchen Display Pi
-
-The Pi only serves static files with Caddy over plain HTTP on the LAN (ADR 0002). To set it up, follow `docs/pi-setup.md`: flash Raspberry Pi OS Lite 64-bit with Imager presets (hostname `kitchen`, SSH key, Wi-Fi), give it a DHCP reservation, add the `kitchen` SSH alias on the Mac, then run `food deploy` and `food publish`. Then set up the Boox with `docs/boox-setup.md` (Fully Kiosk Browser, kiosk PIN, never sleep, always plugged in); Fully's exported settings go in `docs/fully-settings.json`.
-
-`food deploy` runs `pi/setup.sh` as root on the Pi (Caddy, key-only SSH, unattended security upgrades), then uploads the page to `/srv/kitchen/page/`. Run it again to update or repair the Pi; a run that has nothing to do says so. `food publish` uploads bundles into `/srv/kitchen/releases/` and switches the `current` symlink, which Caddy serves `*.json` from.
+The local config lives in `~/Library/Application Support/family-food/` (`FOOD_CONFIG_DIR` overrides it). `FOOD_NOW` fixes the CLI's clock. The config's `fakes` key swaps an adapter for its fake, which keeps its state as JSON files in the folder given (`{ "fakes": { "ah": "/tmp/x/ah", "apple-notes": "/tmp/x/notes", "obsidian": "/tmp/x/obsidian" } }`); the tests use this.
 
 ## Tests
 
@@ -104,8 +96,4 @@ npm test
 npm run typecheck
 ```
 
-`vitest.config.ts` sets `FOOD_FAKES_ONLY=1` for every test and the CLI processes they start: the real AH, Apple Notes and recipe sites off this Mac then refuse, so a test that forgets its fake reaches nothing real.
-
-The sample bundles in `samples/bundles/` are written by the CLI tests and read by the page tests. After an intended change to the bundle, update them with `npx vitest run -u`.
-
-The browser tests (`display/test/*.browser.test.ts`) drive the page served by `food preview` in headless Google Chrome through `playwright-core`, so Chrome must be installed. They fix the page's clock with Playwright's clock.
+`vitest.config.ts` sets `FOOD_FAKES_ONLY=1` for every test and the CLI processes they start: the real AH, Apple Notes and recipe sites off this Mac then refuse, so a test that forgets its fake reaches nothing real, and Obsidian counts as running.

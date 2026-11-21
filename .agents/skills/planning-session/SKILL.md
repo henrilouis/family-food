@@ -40,7 +40,7 @@ The conversation is the draft. Until the adult says "lock it", the only writes a
 4. **Season**: judge it yourself from today's date (the Netherlands); a tiebreaker.
 5. **Sides**: a Meal's first `sides` entry by default, on its cook day; for a Double it covers both days.
 
-Also soft: weekday `total_minutes` ≤ 75; Household Preferences **Less** items (plan them rarely) and **Kids** notes. Meals with `steps: 0` are placeholders the Kitchen Display can't cook from: leave them out.
+Also soft: weekday `total_minutes` ≤ 75; Household Preferences **Less** items (plan them rarely) and **Kids** notes. Meals with `steps: 0` are placeholders with no Method to cook from: leave them out.
 
 **When the hard rules can't all be met**, show a partial proposal that names each broken rule and offers fixes, for example: repeat a Double from an earlier week (bending the repeat window), turn a Double into two single days, or take a Novel Recipe candidate as the Monday Double.
 
@@ -55,6 +55,7 @@ Only these, each straight away:
 ### 1. Find the week
 
 Run `food plan context`. It prints JSON with `week`, `review`, `recentWeeks`, `rejectedSources` and `meals` (every Meal's properties, `steps`, `lastPlanned`, `inRepeatWindow`). Keep it for the whole session.
+- A warning on stderr that Obsidian isn't running on this Mac: the vault may miss edits made on the phone, and nothing written now would reach the phone or the Boox. Ask the adult to open Obsidian and let it sync, then run it again.
 - `week.exists`: that Week Menu is already Locked. Say so and offer to change it ([Changing a Locked Week Menu](#changing-a-locked-week-menu)) instead of planning it again.
 - `week.late`: follow the [Late path](#late-path) from the start.
 
@@ -118,12 +119,12 @@ Only on an explicit "lock it" (or the adult's clear equivalent).
 3. **Save the Novel Recipe**, unless it carried over or waited (it is already in the vault): invoke the `add-recipe` skill with its URL (or text), `novel: true`, the title the Week Menu used, and the folder `Meals`. If add-recipe refuses it (meat), tell the adult, agree another candidate, edit the new note's Novel day row and its `novel` / `novel_source` properties, and invoke add-recipe again.
 4. **Delete the honoured Wishes**: `food notes wishes delete <wish>... --json`, each Wish exactly as listed. Exit 2 (or exit 1): Notes won't take the change; tell the adult to delete the `deleteByHand` Wishes (or all honoured ones) by hand, and list them.
 5. **Publish**: `food publish`.
-   - Exit 0, "Kitchen Display updated…": done.
-   - Exit 0, "Kitchen Display not updated, run `food publish` at home": the Week Menu stands; pass the message on.
+   - Exit 0, "This week note updated.": done.
+   - Exit 0, "Warning: This week note not updated: …": the Week Menu stands; tell the adult the partner's This week note is out of date.
    - Exit 1: check errors. Fix those in this week's note or the new Recipe and run it again; report others.
 6. **Hand off**: invoke the `fill-basket` skill for the week of `week.weekStart`. On the Late path, pass on how the household shops (another AH slot or a store trip). The Week Menu is Locked whatever happens with AH there.
 
-Done when the note is written, the Novel Recipe saved, the Wishes deleted or listed for deletion by hand, the week Published (or the adult told to publish at home), and `fill-basket` started.
+Done when the note is written, the Novel Recipe saved, the Wishes deleted or listed for deletion by hand, the week Published (or the adult told This week is out of date), and `fill-basket` started.
 
 ## The Week Menu JSON
 

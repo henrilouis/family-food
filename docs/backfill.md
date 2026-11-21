@@ -4,7 +4,7 @@ A one-off migration, run on 2026-11-16 on the adult's Mac, that moved the recipe
 
 ## Where things are
 
-- **New vault**: `~/Library/Mobile Documents/iCloud~md~obsidian/Documents/Recipes`. The local `food` config points at it.
+- **New vault**: `~/Library/Mobile Documents/iCloud~md~obsidian/Documents/Recipes`, since moved to Obsidian Sync at `~/Obsidian/Recipes` (ADR 0003, `docs/obsidian-sync-setup.md`). The local `food` config points at it.
 - **Snapshot of the old recipes**, taken before anything else: `~/Documents/family-food-backup/Recipes-snapshot-2026-11-16/` and `Recipes-snapshot-2026-11-16.tar.gz` next to it. It still holds the `Meat` folder.
 - **Old vault**: left untouched. Removing `Notes/Recipes/` from it is a manual step (see below).
 
@@ -28,7 +28,7 @@ The `Meat` folder (6 recipes) was dropped; it exists only in the snapshot. There
 ## What changed in the recipes
 
 - **Meals and Sides** were translated to English (titles, file names and the wikilinks in `Week 2026-15`), converted to metric (cups, ounces, inches, pounds, quarts and °F), and brought to the recipe template: H1 title, `*amount* ingredient` lines, a numbered Method that writes every scalable amount where it's used, notes as a plain paragraph after the Method, servings and source as properties.
-- **Ranges** in amounts became one number (the middle or the usual choice), with the range kept in the ingredient's text where it matters, because the display doubles the leading number only.
+- **Ranges** in amounts became one number (the middle or the usual choice), with the range kept in the ingredient's text where it matters, because doubling scales the leading number only.
 - **Two dinners → one**: Roasted Sweet Potato and Black Bean Burrito Bowls was written for 3 people × 2 dinners and was halved. Perfect Egg Fried Rice said "do recipe ×2 for us" and was doubled to one family dinner (serves 6).
 - **Vegetarian**: Bolognese lost its bacon and beef options (halloumi, vegetarian mince, vegetable stock cube); Oven Potatoes lost duck or beef fat; Crispy Tofu lost fish sauce; Veggie Chili now names vegetarian Worcestershire sauce.
 - **Methods with sub-methods** (Tempeh Burrito, Poke Bowl) were flattened into one numbered list; Perfect Egg Fried Rice keeps the wok method and has the frying-pan method in its notes.

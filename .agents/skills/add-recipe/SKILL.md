@@ -5,7 +5,7 @@ description: Add a Recipe to the Recipe Vault from a URL or pasted text, in Engl
 
 # add-recipe
 
-Turn one recipe (a URL or pasted text) into a Recipe note in the Recipe Vault that `food vault check` passes and the Kitchen Display can cook from. Vocabulary is from `GLOSSARY.md`. The `food` CLI does everything deterministic; run it from this repo (`node cli/food.ts …` if `food` isn't on the PATH).
+Turn one recipe (a URL or pasted text) into a Recipe note in the Recipe Vault that `food vault check` passes and the cook can follow on the Boox in the kitchen. Vocabulary is from `GLOSSARY.md`. The `food` CLI does everything deterministic; run it from this repo (`node cli/food.ts …` if `food` isn't on the PATH).
 
 The vault is the `vault` path in `food config`. Its recipe folders are `Meals`, `Sides` and `Baking`.
 
@@ -50,8 +50,8 @@ The vault is the `vault` path in `food config`. Its recipe folders are `Meals`, 
    Done when the check lists nothing for your note.
 
 8. **Publish when it shows**: run `food recipe published "<Title>"`. If it names a Week Menu, run `food publish`:
-   - exit 0, "Kitchen Display updated…": done.
-   - exit 0, "Kitchen Display not updated, run `food publish` at home": the Pi is out of reach; the note stands. Pass the message on.
+   - exit 0, "This week note updated.": done.
+   - exit 0, "Warning: This week note not updated: …": the note stands; pass the message on.
    - exit 1: check errors. Fix the ones in your note and run it again; report the others.
 
 9. **Report** in a few lines: the note's path and folder; for a Meal, the property values you guessed (`reviewed: false`, so the adult can correct them in the `Meal review` Base); any vegetarian swap; any amount or conversion you weren't sure of; the Publish result.
@@ -121,14 +121,14 @@ Keeps for three days in the fridge; it thickens, so add a splash of water when r
 **Body**:
 - `# Title` in title case, matching the filename.
 - `## Ingredients`: one `- ` line each, the amount first in italics (`*200 g*`, `*2 tbsp*`, `*1*`, `*2 tins (400 g)*`), then the ingredient and its preparation. Lines without a measurable amount ("salt and pepper", "oil for frying") have no italics. Optional `### Subsection` headings (Sauce, Dough, To serve) group lines.
-- `## Method`: a numbered list. Each step writes the amount of every ingredient it uses in the same italic form, followed by the ingredient's name as the list writes it (same words, same singular or plural), because the Kitchen Display bolds that span. An ingredient used in several steps gets its share in each ("*1 tbsp* olive oil" … "the remaining *1 tbsp* olive oil"), adding up to the list's amount.
+- `## Method`: a numbered list. Each step writes the amount of every ingredient it uses in the same italic form, followed by the ingredient's name as the list writes it (same words, same singular or plural), so the cook never scrolls back to the list. An ingredient used in several steps gets its share in each ("*1 tbsp* olive oil" … "the remaining *1 tbsp* olive oil"), adding up to the list's amount.
 - Italics only for amounts that scale when the dinner is doubled. Times, temperatures, pan and tin sizes and piece sizes stay plain ("for 20 minutes", "200°C", "a 20 cm tin", "2 cm cubes"), and nothing else is italic: `food vault check` reads every italic span in a step as an amount that must start with a number.
-- A range becomes one number (the middle, or the usual choice), with the range kept in the text when it matters ("*3* cloves garlic (2–4)"), because the display doubles the leading number only.
+- A range becomes one number (the middle, or the usual choice), with the range kept in the text when it matters ("*3* cloves garlic (2–4)"), because doubling scales the leading number only.
 - Notes (tips, variations, storage, vegetarian swaps, a Side's or Baking recipe's `Source:`) go in plain paragraphs after the Method, separated from it by a blank line. No `## Notes` or `## Source` heading, no `*Serves N*` line.
 
 ## Units
 
-The Basket and the display understand g, kg, ml, l, tsp, tbsp, tins and pieces.
+The Basket understands g, kg, ml, l, tsp, tbsp, tins and pieces.
 - 1 US cup of liquid = 240 ml. A cup of a dry ingredient becomes grams of that ingredient (flour 125 g, sugar 200 g, rice 185 g, oats 90 g, grated cheese 100 g, chopped vegetables about 150 g); when unsure, use ml and say so in the report.
 - 1 oz = 28 g (round sensibly: 8 oz → 225 g), 1 lb = 450 g, 1 fl oz = 30 ml, 1 quart = 950 ml, 1 inch = 2.5 cm.
 - A "15-ounce can" is a 400 g tin: `*1 tin (400 g)*`.

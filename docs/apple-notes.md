@@ -23,7 +23,7 @@ It is unconfirmed whether AppleScript can write to a note shared by another Appl
   { "deleted": [], "notFound": ["Pizza"], "deleteByHand": ["Pasta pesto"], "error": "Apple Notes: …" }
   ```
   `notFound` items were already gone; nothing to do. The skills then read only and give the adult the `deleteByHand` list.
-- `food publish` prints `Warning: This week note not updated: …` and still exits 0. The Kitchen Display part is unaffected.
+- `food publish` prints `Warning: This week note not updated: …` and still exits 0. The vault check has passed by then, so nothing else is held up.
 - A note that can't be read at all (Notes not allowed, folder or note missing) makes the list commands exit 1 with the reason; `delete` / `remove` return every item in `deleteByHand`.
 
 The tests use a fake (`fakes["apple-notes"]` in the local config): `notes.json` holds the note bodies as HTML, and `fake.json` `{ "writes": "fail" }` or `{ "writes": "ignore" }` simulates a refused or a silently dropped write. Under tests the real Apple Notes is switched off.
@@ -38,6 +38,6 @@ Do this once on the Mac, with the partner at hand, and record the result on issu
    - Works: exit 0, `"deleted": ["test wish from food"]`. On the partner's iPhone the line is gone within a few minutes and the other Wishes are still there; check again after 10 minutes that it didn't come back.
    - Fails: exit 2 with `deleteByHand` and an `error`. Copy the error. Delete the line by hand.
 4. **Remove a recipe to add.** On the partner's iPhone, add the line `https://example.com/test-recipe` to Recipes to add, then run `food notes recipes-to-add remove "https://example.com/test-recipe" --json`. Check as in step 3.
-5. **This week.** Run `food publish` (the Pi may be out of reach; that's fine). Expect `This week note updated.` or `Warning: This week note not updated: …`. On the partner's iPhone, This week should show the current and upcoming Week Menus.
+5. **This week.** Run `food publish`. Expect `This week note updated.` or `Warning: This week note not updated: …`. On the partner's iPhone, This week should show the current and upcoming Week Menus.
 6. Note whether formatting in Food wishes (bullets, checklist) survived step 3.
 7. Record on issue #25: macOS version, folder and note owners, and for steps 2–5 whether it worked, any error text, and whether the change reached the partner's iPhone. If writes fail, the read-only fallback is what the skills use from then on.
