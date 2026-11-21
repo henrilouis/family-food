@@ -13,5 +13,5 @@
     "resolveJsonModule": true,
     "skipLibCheck": true
   },
-  "include": ["bundle", "cli", "display", "vitest.config.ts"]
+  "include": ["cli", "vitest.config.ts"]
 }

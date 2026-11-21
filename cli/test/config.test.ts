@@ -5,7 +5,7 @@ describe("food config", () => {
   test("a command that needs the Recipe Vault explains how to set it when none is configured", async () => {
     const { run } = await sandbox({ configured: false });
 
-    const result = await run(["bundle"]);
+    const result = await run(["vault", "check"]);
 
     expect(result.code).toBe(1);
     expect(result.stderr).toContain("food config vault <path>");
