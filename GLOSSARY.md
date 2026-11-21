@@ -64,6 +64,10 @@ _Avoid_: Cart, order (before checkout)
 The Albert Heijn product remembered for a recipe ingredient or a Staple, bought without asking again.
 _Avoid_: Mapping, match
 
+**Match**:
+The Albert Heijn product, or none, chosen for one ingredient line of a Locked Week Menu's Recipes when filling a Basket. A Match comes from the line's Pinned Product, or is new; a new Match becomes a Pinned Product once an adult confirms it.
+_Avoid_: Mapping, Pinned Product (for a choice not yet confirmed)
+
 **Cupboard Ingredient**:
 A long-life recipe ingredient (tins, dried legumes, rice, less common spices) that the household is asked about each time a Basket is filled, because it may already be in the house. Unlike an Ask Staple, it is needed for a dinner.
 _Avoid_: Pantry item
@@ -71,12 +75,8 @@ _Avoid_: Pantry item
 **Always in House**:
 Said of a recipe ingredient that is never bought or asked about (salt, oil, everyday spices) until someone says it is running low.
 
-### Kitchen
-
-**Kitchen Display**:
-The e-ink device in the kitchen that shows the Week Menu and the Recipe being cooked.
-_Avoid_: Boox, tablet, reader
+### Sharing
 
 **Publish**:
-To send the current and upcoming Week Menus, with their Recipes, to everything that shows them: the Kitchen Display and the shared "This week" note. Edits reach those places only when they are published.
+To send the current and upcoming Week Menus to the shared "This week" note, for the adult who doesn't use the Recipe Vault. Edits reach that note only when they are published.
 _Avoid_: Sync, push, deploy
