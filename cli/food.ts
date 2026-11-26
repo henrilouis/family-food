@@ -57,7 +57,7 @@ Commands:
   basket fill --week <YYYY-MM-DD> <matches.json>
                         Fill Mijn lijst for a Locked Week Menu from the fill-basket skill's Matches
                         ({"lines": [{recipe, line, product, packFraction, kind}], "haveAtHome": [ids]}):
-                        Doubles ×2, Staples added, summed and rounded to whole packs, unmatched lines as
+                        Doubles ×2 (×1 when written for both days), Staples added, summed and rounded to whole packs, unmatched lines as
                         notes; an optional line only when it has an entry. Never removes anything. Writes the
                         Week Menu's ## Basket section and a report.
                         Run again, adds only the difference with ## Basket and lists what is no longer needed.

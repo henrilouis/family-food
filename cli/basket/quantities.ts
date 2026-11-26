@@ -57,7 +57,7 @@ export type BasketPlan = {
 
 /**
  * Works out what the Locked Week Menu starting on `weekStart` needs from AH: each ingredient line as written,
- * ×2 on a Double cook day, nothing for a Double 2nd day or the Free Day, nor for an optional line the list has no
+ * ×2 on a Double cook day (×1 for a Recipe written for both days), nothing for a Double 2nd day or the Free Day, nor for an optional line the list has no
  * entry for (an entry means the adult asked for it); plus the Staples;
  * summed per product, then rounded to whole packs; without Always in House items and what is at home.
  */

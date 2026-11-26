@@ -31,7 +31,7 @@ A day in the Week Menu whose dinner is planned.
 The one day of the week whose dinner is deliberately not planned (eating out, takeaway, odds and ends); Friday unless moved for a given week.
 
 **Double Recipe**:
-A Recipe cooked once in a quantity that covers two consecutive Menu Days: the day it is cooked and the next.
+A Recipe cooked once in a quantity that covers two consecutive Menu Days: the day it is cooked and the next. Usually written for one dinner and doubled on its cook day; one that serves more than 6 is written for both days and cooked as written.
 _Avoid_: Leftovers, batch cooking
 
 **Household Preferences**:

@@ -25,7 +25,7 @@ Done when you have a `week_start` whose Week Menu note exists.
 ### 2. List the lines
 
 Run `food basket lines --week <week_start>`. When it warns on stderr that Obsidian isn't running on this Mac, ask the adult to open Obsidian and let it sync, then run it again: the vault may miss edits made on the phone. It prints JSON `lines`, one per ingredient line of every Recipe and Side the week buys:
-- `line` (as written), `ingredient` (the name its Pinned Product is found by: without amount, preparation or remarks in brackets, and "tinned …" for a line bought in tins), `times` (dinners it is bought for: 2 on a Double cook day), `optional`;
+- `line` (as written), `ingredient` (the name its Pinned Product is found by: without amount, preparation or remarks in brackets, and "tinned …" for a line bought in tins), `times` (dinners it is bought for: 2 on a Double cook day, 1 when the Recipe is written for both days), `optional`;
 - `pinned`: the Pinned Product from Products.md (`product` id or null, `title`, `pack`, `kind`), or null;
 - `match`: for a pinned, non-optional line, its Match (from the Pinned Product) for `food basket fill`, ready to use. `packFraction: null` means the CLI couldn't compare the amount with the Pack: you work it out.
 

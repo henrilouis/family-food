@@ -36,7 +36,7 @@ From now on, keep Obsidian open on the Mac while the agent plans, adds recipes o
 3. BOOX per-app settings for Obsidian (long-press its icon): EinkWise **HD** mode; App Optimization → Others → Custom side buttons: **Scrolling** (or try Page turning).
 4. Front light off. Normal sleep is fine: Obsidian syncs once it's open again; give it a few seconds after waking.
 
-On a Double cook day, double the italic amounts yourself; the Week Menu's Note column says "Double: cook".
+On a Double cook day, double the italic amounts yourself; the Week Menu's Note column says "Double: cook". A Recipe that serves more than 6 is already written for both days: cook it as written.
 
 ## 4. Check it
 

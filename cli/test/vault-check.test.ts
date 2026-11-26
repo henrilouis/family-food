@@ -172,15 +172,15 @@ describe("food vault check", () => {
       expect(result.stdout).toContain("0 errors, 0 warnings");
     });
 
-    test("a Meal that serves more than 6, probably still written for two dinners", async () => {
+    test("a Meal that serves more than 6 but isn't a Double, probably still written for two dinners", async () => {
       const { run, vault } = await sandbox();
+      await edit(vault, "Meals/Vegetable Biryani.md", "serves: 5", "serves: 8");
       await edit(vault, "Meals/Dahl.md", "serves: 4", "serves: 8");
-      await edit(vault, "Meals/Vegetable Biryani.md", "serves: 5", "serves: 6");
 
       const result = await run(["vault", "check"]);
 
       expect(result.code).toBe(0);
-      expect(result.stdout).toMatch(/warning .*Meals\/Dahl\.md: .*serves 8/);
+      expect(result.stdout).toMatch(/warning .*Meals\/Vegetable Biryani\.md: .*serves 8/);
       expect(result.stdout).toContain("0 errors, 1 warning");
     });
   });
@@ -189,14 +189,14 @@ describe("food vault check", () => {
     test("prints the errors and warnings as JSON for an agent, with the same exit code", async () => {
       const { run, vault } = await sandbox();
       await edit(vault, "Sides/Naan.md", "- *7g* active dry yeast", "- *one sachet* active dry yeast");
-      await edit(vault, "Meals/Dahl.md", "serves: 4", "serves: 8");
+      await edit(vault, "Meals/Vegetable Biryani.md", "serves: 5", "serves: 8");
 
       const result = await run(["vault", "check", "--json"]);
 
       expect(result.code).toBe(1);
       const check = JSON.parse(result.stdout);
       expect(check.errors).toEqual([{ file: "Sides/Naan.md", message: expect.stringContaining('"one sachet"') }]);
-      expect(check.warnings).toEqual([{ file: "Meals/Dahl.md", message: expect.stringContaining("serves 8") }]);
+      expect(check.warnings).toEqual([{ file: "Meals/Vegetable Biryani.md", message: expect.stringContaining("serves 8") }]);
     });
   });
 

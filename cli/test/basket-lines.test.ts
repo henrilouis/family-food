@@ -38,6 +38,17 @@ describe("food basket lines", () => {
     expect(all.find((l) => l.line === "salt and pepper")).toMatchObject({ ingredient: "salt and pepper" });
   });
 
+  test("buys a Double Recipe that serves more than 6 once on its cook day: it is written for both days", async () => {
+    const box = await sandbox();
+    const dahl = path.join(box.vault, "Meals", "Dahl.md");
+    await writeFile(dahl, (await readFile(dahl, "utf8")).replace("serves: 4", "serves: 8"));
+
+    const all = await lines(box);
+
+    expect(all.find((l) => l.recipe === "Dahl")).toMatchObject({ times: 3 });
+    expect(all.find((l) => l.recipe === "Naan")).toMatchObject({ times: 4 });
+  });
+
   test("gives each line its Pinned Product from Products.md, also when the line says it in the plural", async () => {
     const box = await sandbox();
 

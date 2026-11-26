@@ -40,7 +40,7 @@ The vault is the `vault` path in `food config`. Its recipe folders are `Meals`, 
 5. **Bring it to house style** (see [The Recipe note](#the-recipe-note)):
    - English (British names, as in the vault: aubergine, courgette, coriander, chickpeas, spring onion). Keep a dish's own name where English uses it too (Bami Goreng, Shakshuka).
    - Metric (see [Units](#units)).
-   - One dinner: if the recipe is written for two dinners or meal prep ("makes two meals", "double it for us"), bring it back to one dinner. Otherwise keep the amounts and `serves` as written; the household doesn't rescale.
+   - One dinner: if the recipe is written for two dinners or meal prep ("makes two meals", "double it for us"), bring it back to one dinner, unless it is a Double Recipe whose amounts only work as the full pot (whole tins): then keep it as written with `serves` above 6, and it counts for both days of a Double. Otherwise keep the amounts and `serves` as written; the household doesn't rescale.
    - Every Method step writes each ingredient it uses with its amount, italic, right where it's used.
    Done when every ingredient line has its amount (or none, for "to taste" lines) and every amount in the list is used up across the steps.
 
@@ -110,7 +110,7 @@ Keeps for three days in the fridge; it thickens, so add a splash of water when r
 ```
 
 **Properties** (Meals only, in this order; the meanings and the fixed lists are in `docs/meal-properties.md`, read it):
-- `serves`: portions as written for one dinner, a whole number. Above 6 usually means two dinners (the check warns).
+- `serves`: portions as written for one dinner, a whole number. Above 6 means two dinners: only for a `double: true` Recipe written for both days of a Double (the check warns otherwise).
 - `active_minutes` (hands-on) and `total_minutes` (including oven, soaking, rising): from the source's times when they look right, otherwise estimated from the Method. Weekday dinners are planned with `active_minutes` ≤ 45, so estimate honestly.
 - `cuisine`: one value from the fixed list; `base`: values from the fixed list, following that doc's rules.
 - `double`: true when it reheats well and scales to two days (curries, stews, chili, soups, bakes); false for crisp, fried, fresh or delicate dishes.

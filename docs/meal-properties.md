@@ -1,10 +1,10 @@
 # Meal properties
 
-Every Meal in the Recipe Vault's `Meals` folder carries these properties. Sides and Baking have none. `food vault check` warns about any other property, a Meal with no `cuisine`, a `cuisine` or `base` value outside the lists below, and `serves` above 6.
+Every Meal in the Recipe Vault's `Meals` folder carries these properties. Sides and Baking have none. `food vault check` warns about any other property, a Meal with no `cuisine`, a `cuisine` or `base` value outside the lists below, and `serves` above 6 on a Meal that isn't `double: true`.
 
 | Property | Type | Meaning |
 |---|---|---|
-| `serves` | number | Portions as written (one dinner) |
+| `serves` | number | Portions as written (one dinner). Above 6 on a Double Recipe: written for both days of a Double, so its cook day buys and cooks it once instead of twice |
 | `active_minutes` | number | Hands-on time |
 | `total_minutes` | number | Including oven, soaking, dough waits |
 | `cuisine` | text | One value from the `cuisine` list |

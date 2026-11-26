@@ -133,6 +133,15 @@ export function linkTarget(cell: string): string | null {
 /** The folders a Week Menu's dinners and sides link into, in lookup order. */
 export const RECIPE_FOLDERS = ["Meals", "Sides"];
 
+/** A Recipe's `serves` above this is written for two dinners. */
+export const ONE_DINNER_SERVES = 6;
+
+/** A Double Recipe written for both days of a Double (`serves` above 6), so its cook day buys and cooks it once. */
+export function coversBothDays(note: Note): boolean {
+  const { serves, double } = note.properties;
+  return double === true && typeof serves === "number" && serves > ONE_DINNER_SERVES;
+}
+
 /** The Recipe or Side a Week Menu links to by `name`. */
 export async function readRecipe(vault: string, name: string): Promise<Recipe> {
   const note = await findRecipeNote(vault, name);

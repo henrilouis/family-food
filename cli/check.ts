@@ -4,7 +4,7 @@ import type { MenuDay } from "./model.ts";
 import { dayLabel } from "./dates.ts";
 import { parseRecipeAmount } from "./amount.ts";
 import { isPublished } from "./published.ts";
-import { findRecipeNote, linkTarget, NoteError, parseRecipe, parseWeekMenu, readNotes, readWeekMenuNotes, RECIPE_FOLDERS, weekStartOf, type Note } from "./vault.ts";
+import { findRecipeNote, linkTarget, NoteError, ONE_DINNER_SERVES, parseRecipe, parseWeekMenu, readNotes, readWeekMenuNotes, RECIPE_FOLDERS, weekStartOf, type Note } from "./vault.ts";
 
 /** A format problem in one Recipe Vault note. `file` is relative to the vault, e.g. "Meals/Dahl.md". */
 export type Problem = { file: string; message: string };
@@ -104,7 +104,7 @@ function mealPropertyProblems(note: Note, lists: FixedLists): string[] {
   for (const key of Object.keys(note.properties)) {
     if (!MEAL_PROPERTIES.includes(key)) problems.push(`the property "${key}" isn't a Meal property (${MEAL_PROPERTIES.join(", ")})`);
   }
-  const { cuisine, base, serves } = note.properties;
+  const { cuisine, base, serves, double } = note.properties;
   if (cuisine === undefined || cuisine === null || cuisine === "") problems.push("no cuisine");
   else if (!lists.cuisine.includes(String(cuisine))) {
     problems.push(`cuisine "${cuisine}" isn't in the fixed list (${lists.cuisine.join(", ")})`);
@@ -112,8 +112,8 @@ function mealPropertyProblems(note: Note, lists: FixedLists): string[] {
   for (const value of base === undefined || base === null ? [] : [base].flat()) {
     if (!lists.base.includes(String(value))) problems.push(`base "${value}" isn't in the fixed list (${lists.base.join(", ")})`);
   }
-  if (typeof serves === "number" && serves > 6) {
-    problems.push(`serves ${serves}, more than 6: is it still written for two dinners?`);
+  if (typeof serves === "number" && serves > ONE_DINNER_SERVES && double !== true) {
+    problems.push(`serves ${serves}, more than ${ONE_DINNER_SERVES}: is it still written for two dinners? Only a Double Recipe may be`);
   }
   return problems;
 }
