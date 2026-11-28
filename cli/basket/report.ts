@@ -52,7 +52,7 @@ function orderLabel(date: string): string {
   return `order for ${dayLabel(date, { long: true })}`;
 }
 
-function formatFilled({ plan, change, products, total, into }: Extract<BasketOutcome, { kind: "filled" }>): string {
+function formatFilled({ plan, change, removed, products, total, into }: Extract<BasketOutcome, { kind: "filled" }>): string {
   const where = into ? `the ${orderLabel(into.date)}` : "Mijn lijst";
   const added = products.filter((p) => p.added > 0 && p.before === 0);
   const alreadyThere = products.filter((p) => p.added > 0 && p.before > 0);
@@ -64,10 +64,15 @@ function formatFilled({ plan, change, products, total, into }: Extract<BasketOut
     group(`Added to ${where}`, added.map((p) => `${p.added} × ${p.title}${p.price === null ? "" : ` (${euro(p.price)} each)`}`)),
     group(`Already in ${where}, added on top`, alreadyThere.map((p) => `${p.title}: ${p.before} + ${p.added} = ${p.before + p.added}`)),
     unchanged.length ? group("Added on an earlier run, unchanged", unchanged) : "",
-    group(`No longer needed, remove these from ${where} by hand`, [
-      ...change.remove.map((p) => `${p.quantity} × ${p.title}`),
-      ...change.removeNotes.map((note) => `Note: ${note}`),
-    ]),
+    into
+      ? group(`No longer needed, remove these from ${where} by hand`, [
+          ...change.remove.map((p) => `${p.quantity} × ${p.title}`),
+          ...change.removeNotes.map((note) => `Note: ${note}`),
+        ])
+      : group("No longer needed, removed from Mijn lijst", [
+          ...removed.remove.map((p) => `${p.quantity} × ${p.title}`),
+          ...removed.removeNotes.map((note) => `Note: ${note}`),
+        ]),
     group(into ? "Unmatched, added as notes to Mijn lijst" : "Unmatched, added as notes", change.addNotes),
     group("Optional, not added", plan.optional),
     `Have at home: ${plan.haveAtHome.join(", ") || "none"}\n`,

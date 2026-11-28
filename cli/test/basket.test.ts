@@ -63,7 +63,7 @@ async function basketBox(catalogue: AhProduct[]) {
   const order = async (): Promise<FakeBasket> => JSON.parse(await readFile(path.join(ah, "order.json"), "utf8"));
 
   /** Every write the fake AH received, in order; [] when none. */
-  const requests = async (): Promise<{ add: FakeBasket }[]> =>
+  const requests = async (): Promise<({ add: FakeBasket } | { remove: unknown })[]> =>
     JSON.parse(await readFile(path.join(ah, "basket-requests.json"), "utf8").catch(() => "[]"));
 
   /** Sets the fake AH's mode: "order placed", "subscription slot", "login expired" or "AH down". */
@@ -394,7 +394,7 @@ describe("food basket fill", () => {
         "- 2 × AH Spaghetti 500 g (€1.29 each)",
         "Already in Mijn lijst, added on top:",
         "- AH Passata 500 g: 1 + 1 = 2",
-        "No longer needed, remove these from Mijn lijst by hand: none",
+        "No longer needed, removed from Mijn lijst: none",
         "Unmatched, added as notes:",
         "- basil leaves (10)",
         "Optional, not added:",
@@ -523,7 +523,7 @@ describe("food basket fill again", () => {
     return box;
   }
 
-  test("after a menu change adds only the difference and lists what is no longer needed, removing nothing", async () => {
+  test("after a menu change adds only the difference and takes out of Mijn lijst what is no longer needed", async () => {
     const box = await filledOnce();
     await box.changeMenu([["Pasta", "", ""], ["Pasta", "", ""]]);
 
@@ -533,11 +533,15 @@ describe("food basket fill again", () => {
     expect(result.code).toBe(0);
     expect((await box.requests()).slice(1)).toEqual([
       { add: { products: [{ id: 1, quantity: 1 }, { id: 2, quantity: 1 }], notes: [{ description: "basil leaves (10)", quantity: 1 }] } },
+      { remove: { products: [{ id: 3, quantity: 1 }], notes: [{ description: "basil leaves (5)" }, { description: "sage leaves (10)" }] } },
     ]);
-    expect(quantities(await box.basket())).toEqual({ 1: 2, 2: 2, 3: 1 });
+    expect(await box.basket()).toEqual({
+      products: [{ id: 1, quantity: 2 }, { id: 2, quantity: 2 }],
+      notes: [{ description: "basil leaves (10)", quantity: 1 }],
+    });
     expect(result.stdout).toContain(
       [
-        "No longer needed, remove these from Mijn lijst by hand:",
+        "No longer needed, removed from Mijn lijst:",
         "- 1 × AH Risottorijst 500 g",
         "- Note: basil leaves (5)",
         "- Note: sage leaves (10)",
@@ -567,21 +571,28 @@ describe("food basket fill again", () => {
     expect(await box.requests()).toHaveLength(1);
     expect(quantities(await box.basket())).toEqual({ 1: 1, 2: 1, 3: 1 });
     expect(result.stdout).toContain("Added to Mijn lijst: none\n");
-    expect(result.stdout).toContain("No longer needed, remove these from Mijn lijst by hand: none\n");
+    expect(result.stdout).toContain("No longer needed, removed from Mijn lijst: none\n");
     expect(result.stdout).toContain(
       "Added on an earlier run, unchanged:\n- 1 × AH Spaghetti 500 g\n- 1 × AH Passata 500 g\n- 1 × AH Risottorijst 500 g\n- Note: basil leaves (5)\n- Note: sage leaves (10)\n",
     );
   });
 
-  test("doesn't list as no longer needed what was already taken out of Mijn lijst", async () => {
+  test("removes only what is still in Mijn lijst, and never more than an earlier run added", async () => {
     const box = await filledOnce();
-    await box.seedBasket({ products: [{ id: 1, quantity: 1 }, { id: 2, quantity: 1 }], notes: [{ description: "basil leaves (5)", quantity: 1 }] });
+    await box.seedBasket({
+      products: [{ id: 1, quantity: 1 }, { id: 2, quantity: 1 }, { id: 3, quantity: 3 }],
+      notes: [{ description: "basil leaves (5)", quantity: 1 }, { description: "wc-papier", quantity: 1 }],
+    });
     await box.changeMenu([["Pasta", "", ""]]);
 
     const result = await box.fill(pasta);
 
     expect(result.code).toBe(0);
-    expect(result.stdout).toContain("No longer needed, remove these from Mijn lijst by hand: none\n");
+    expect(await box.basket()).toEqual({
+      products: [{ id: 1, quantity: 1 }, { id: 2, quantity: 1 }, { id: 3, quantity: 2 }],
+      notes: [{ description: "basil leaves (5)", quantity: 1 }, { description: "wc-papier", quantity: 1 }],
+    });
+    expect(result.stdout).toContain("No longer needed, removed from Mijn lijst:\n- 1 × AH Risottorijst 500 g\n");
   });
 });
 
@@ -961,6 +972,53 @@ describe("food basket fill when AH fails", () => {
     expect(again.code).toBe(0);
     expect((await box.requests()).slice(1)).toEqual([
       { add: { products: [{ id: 1, quantity: 1 }, { id: 2, quantity: 1 }], notes: [{ description: "basil leaves (20)", quantity: 1 }] } },
+      { remove: { products: [], notes: [{ description: "basil leaves (10)" }] } },
     ]);
+  });
+});
+
+describe("food basket remove", () => {
+  async function filled() {
+    const box = await basketBox([
+      { webshopId: 1, title: "AH Spaghetti 500 g", priceBeforeBonus: 1.29 },
+      { webshopId: 2, title: "AH Passata 500 g", priceBeforeBonus: 0.99 },
+    ]);
+    await box.seedBasket({
+      products: [{ id: 1, quantity: 3 }, { id: 2, quantity: 1 }],
+      notes: [{ description: "wc-papier", quantity: 1 }, { description: "basil leaves (5)", quantity: 1 }],
+    });
+    return box;
+  }
+
+  test("takes the picked products, whole lines or some packs, and notes out of Mijn lijst", async () => {
+    const box = await filled();
+
+    const result = await box.run(["basket", "remove", "--product", "1:2", "--product", "2", "--note", "wc-papier"]);
+
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(0);
+    expect(await box.basket()).toEqual({ products: [{ id: 1, quantity: 1 }], notes: [{ description: "basil leaves (5)", quantity: 1 }] });
+    expect(result.stdout).toBe("Removed from Mijn lijst:\n- 2 × AH Spaghetti 500 g\n- 1 × AH Passata 500 g\n- Note: wc-papier\n");
+  });
+
+  test("says what wasn't in Mijn lijst and writes nothing for it", async () => {
+    const box = await filled();
+
+    const result = await box.run(["basket", "remove", "--product", "7", "--note", "tea"]);
+
+    expect(result.code).toBe(0);
+    expect(await box.requests()).toEqual([]);
+    expect(result.stdout).toBe("Removed from Mijn lijst: none\nNot in Mijn lijst:\n- id 7\n- Note: tea\n");
+  });
+
+  test("refuses while an order is open for changes in the AH app", async () => {
+    const box = await filled();
+    await box.mode({ mode: "subscription slot", date: WEEK, status: "REOPENED" });
+
+    const result = await box.run(["basket", "remove", "--product", "1"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("An order is open for changes in the AH app");
+    expect(await box.requests()).toEqual([]);
   });
 });

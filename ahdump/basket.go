@@ -27,10 +27,31 @@ const openOrdersQuery = `query FamilyFoodOpenOrders {
   }
 }`
 
-// basketItemsAdd adds to the quantity already in Mijn lijst; it never sets or removes.
+// basketItemsAdd adds to the quantity already in Mijn lijst.
 const basketItemsAdd = `mutation FamilyFoodBasketItemsAdd($items: [BasketMutation!]!) {
   basketItemsAdd(items: $items) { status errorMessage }
 }`
+
+// basketItemsUpdate sets a product's quantity in Mijn lijst; basketItemsDelete takes a product line out by id, or
+// a free-text note by its description (both checked live 2026-11-28).
+const basketItemsUpdate = `mutation FamilyFoodBasketItemsUpdate($items: [BasketMutation!]!) {
+  basketItemsUpdate(items: $items) { status errorMessage }
+}`
+
+const basketItemsDelete = `mutation FamilyFoodBasketItemsDelete($items: [BasketDelete!]!) {
+  basketItemsDelete(items: $items) { status errorMessage }
+}`
+
+// basketRemovals is what `basket-remove` reads on stdin: quantities to take off product lines, notes to delete.
+type basketRemovals struct {
+	Products []struct {
+		ID       int `json:"id"`
+		Quantity int `json:"quantity"`
+	} `json:"products"`
+	Notes []struct {
+		Description string `json:"description"`
+	} `json:"notes"`
+}
 
 // basketAdditions is what `basket-add` reads on stdin.
 type basketAdditions struct {
@@ -98,7 +119,7 @@ func (a *ah) activeOrder(ctx context.Context) (json.RawMessage, error) {
 }
 
 // addToBasket adds products through basketItemsAdd and free-text notes through the shopping list's v2 PATCH
-// (the write albertheijn-mcp verified for notes on 2026-10-01), then returns Mijn lijst. It never removes anything.
+// (the write albertheijn-mcp verified for notes on 2026-10-01), then returns Mijn lijst.
 func (a *ah) addToBasket(ctx context.Context, add basketAdditions) (json.RawMessage, error) {
 	c, err := a.userClient(ctx)
 	if err != nil {
@@ -143,6 +164,96 @@ func (a *ah) addToBasket(ctx context.Context, add basketAdditions) (json.RawMess
 	return a.basket(ctx)
 }
 
+// removeFromBasket takes the quantities off Mijn lijst's product lines (a line that would reach 0 is deleted)
+// and deletes the notes, then returns Mijn lijst. Products and notes not in Mijn lijst are skipped. It refuses
+// while an order is open for changes in the AH app: whether these mutations change that order is unchecked.
+func (a *ah) removeFromBasket(ctx context.Context, remove basketRemovals) (json.RawMessage, error) {
+	c, err := a.userClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	active, err := a.activeOrder(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if string(active) != "null" {
+		return nil, fmt.Errorf("basket-remove: an order is open for changes in the AH app; change it there")
+	}
+	raw, err := a.basket(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var current struct {
+		ItemsInList []struct {
+			Quantity int `json:"quantity"`
+			Product  struct {
+				ID int `json:"id"`
+			} `json:"product"`
+		} `json:"itemsInList"`
+		Notes []struct {
+			Description string `json:"description"`
+		} `json:"notes"`
+	}
+	if err := json.Unmarshal(raw, &current); err != nil {
+		return nil, fmt.Errorf("reading Mijn lijst: %w", err)
+	}
+	inList := map[int]int{}
+	for _, item := range current.ItemsInList {
+		inList[item.Product.ID] += item.Quantity
+	}
+	var updates []map[string]int
+	var deletes []map[string]any
+	for _, p := range remove.Products {
+		if p.Quantity < 1 {
+			return nil, fmt.Errorf("basket-remove: product %d has quantity %d; give how many to take off", p.ID, p.Quantity)
+		}
+		have, ok := inList[p.ID]
+		if !ok {
+			continue
+		}
+		if left := have - p.Quantity; left > 0 {
+			updates = append(updates, map[string]int{"id": p.ID, "quantity": left})
+		} else {
+			deletes = append(deletes, map[string]any{"id": p.ID})
+		}
+	}
+	for _, n := range remove.Notes {
+		for _, there := range current.Notes {
+			if there.Description == n.Description {
+				deletes = append(deletes, map[string]any{"description": n.Description})
+				break
+			}
+		}
+	}
+	type outcome struct {
+		Status       string `json:"status"`
+		ErrorMessage string `json:"errorMessage"`
+	}
+	if len(updates) > 0 {
+		var result struct {
+			BasketItemsUpdate outcome `json:"basketItemsUpdate"`
+		}
+		if err := c.DoGraphQL(ctx, basketItemsUpdate, map[string]any{"items": updates}, &result); err != nil {
+			return nil, a.userError("lowering quantities in Mijn lijst", err)
+		}
+		if r := result.BasketItemsUpdate; r.Status != "SUCCESS" {
+			return nil, fmt.Errorf("lowering quantities in Mijn lijst: AH answered %s %s", r.Status, r.ErrorMessage)
+		}
+	}
+	if len(deletes) > 0 {
+		var result struct {
+			BasketItemsDelete outcome `json:"basketItemsDelete"`
+		}
+		if err := c.DoGraphQL(ctx, basketItemsDelete, map[string]any{"items": deletes}, &result); err != nil {
+			return nil, a.userError("removing from Mijn lijst", err)
+		}
+		if r := result.BasketItemsDelete; r.Status != "SUCCESS" {
+			return nil, fmt.Errorf("removing from Mijn lijst: AH answered %s %s", r.Status, r.ErrorMessage)
+		}
+	}
+	return a.basket(ctx)
+}
+
 // userError turns a 401 into errLogin, so the CLI asks for a new login, and AH not answering into errDown.
 func (a *ah) userError(doing string, err error) error {
 	if a.transport.lastStatus() == http.StatusUnauthorized {
@@ -170,6 +281,22 @@ func basketAdd(ctx context.Context, ah *ah) error {
 		return fmt.Errorf("basket-add: expected {\"products\": [{\"id\", \"quantity\"}], \"notes\": [{\"description\", \"quantity\"}]} on stdin: %w", err)
 	}
 	basket, err := ah.addToBasket(ctx, add)
+	if err != nil {
+		return err
+	}
+	return printJSON(basket)
+}
+
+func basketRemove(ctx context.Context, ah *ah) error {
+	b, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		return err
+	}
+	var remove basketRemovals
+	if err := json.Unmarshal(b, &remove); err != nil {
+		return fmt.Errorf("basket-remove: expected {\"products\": [{\"id\", \"quantity\"}], \"notes\": [{\"description\"}]} on stdin: %w", err)
+	}
+	basket, err := ah.removeFromBasket(ctx, remove)
 	if err != nil {
 		return err
 	}

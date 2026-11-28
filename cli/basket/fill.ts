@@ -33,10 +33,20 @@ export type FilledProduct = PlannedProduct & { title: string; added: number; bef
 export type BasketOutcome =
   /**
    * Mijn lijst is filled, or with `into` set, the order open for changes in the AH app: its products went there,
-   * its notes to Mijn lijst. `change` only holds removals still possible: what is still in Mijn lijst or that order.
-   * `total` is the estimated total of Mijn lijst's or that order's products after adding, from the prices AH gives.
+   * its notes to Mijn lijst. `removed` is what an earlier run added that is no longer needed and was taken out of
+   * Mijn lijst; with `into` set nothing is removed and `change` holds what to remove from that order by hand
+   * (only what is still in it). `total` is the estimated total of Mijn lijst's or that order's products after, from
+   * the prices AH gives.
    */
-  | { kind: "filled"; plan: BasketPlan; change: BasketChange; products: FilledProduct[]; total: number; into: OrderInFocus | null }
+  | {
+      kind: "filled";
+      plan: BasketPlan;
+      change: BasketChange;
+      removed: Pick<BasketChange, "remove" | "removeNotes">;
+      products: FilledProduct[];
+      total: number;
+      into: OrderInFocus | null;
+    }
   /** An order delivering in the Week Menu's week is placed: nothing was written to AH. */
   | { kind: "order placed"; plan: BasketPlan; change: BasketChange; order: { id: number; status: string; date: string } }
   /** An order for another week is open for changes in the AH app, so products would go into it: nothing was written to AH. */
@@ -48,8 +58,9 @@ export type BasketOutcome =
 
 /**
  * Adds to Mijn lijst what the plan needs beyond what an earlier run recorded: products merge into lines already
- * there, unmatched items go in as free-text notes. Never removes anything; what is no longer needed is only listed.
- * While the week's empty order is open for changes in the AH app, the products go into it instead (AH does that).
+ * there, unmatched items go in as free-text notes. Takes out of Mijn lijst what an earlier run added that is no
+ * longer needed, never more than is still there. While the week's empty order is open for changes in the AH app,
+ * the products go into it instead (AH does that) and what is no longer needed is only listed.
  * Writes nothing once an order delivering in the Week Menu's week is placed, nor while an order for another week is
  * open for changes. When AH refuses the login, `log`s a prompt and runs
  * the browser login once; if AH still refuses, writes nothing. Writes nothing either when AH doesn't answer.
@@ -97,18 +108,27 @@ async function fillWith(gateway: AhGateway, plan: BasketPlan, change: BasketChan
     products: change.add.map(({ id, quantity }) => ({ id, quantity })),
     notes: change.addNotes.map((description) => ({ description, quantity: 1 })),
   };
-  const written = additions.products.length || additions.notes.length ? await gateway.addToBasket(additions) : list;
-  const after = focus ? { products: (await gateway.orderInFocus())?.products ?? [], notes: written.notes } : written;
+  const added = additions.products.length || additions.notes.length ? await gateway.addToBasket(additions) : list;
   const inList = (id: number) => before.products.find((p) => p.id === id)?.quantity ?? 0;
+  const stillThere = {
+    remove: change.remove.map((p) => ({ ...p, quantity: Math.min(p.quantity, inList(p.id)) })).filter((p) => p.quantity > 0),
+    removeNotes: change.removeNotes.filter((note) => before.notes.some((n) => n.description === note)),
+  };
+  const removed = focus ? { remove: [], removeNotes: [] } : stillThere;
+  const written =
+    removed.remove.length || removed.removeNotes.length
+      ? await gateway.removeFromBasket({
+          products: removed.remove.map(({ id, quantity }) => ({ id, quantity })),
+          notes: removed.removeNotes.map((description) => ({ description })),
+        })
+      : added;
+  const after = focus ? { products: (await gateway.orderInFocus())?.products ?? [], notes: written.notes } : written;
   return {
     kind: "filled",
     plan,
     into: focus,
-    change: {
-      ...change,
-      remove: change.remove.map((p) => ({ ...p, quantity: Math.min(p.quantity, inList(p.id)) })).filter((p) => p.quantity > 0),
-      removeNotes: change.removeNotes.filter((note) => before.notes.some((n) => n.description === note)),
-    },
+    removed,
+    change: focus ? { ...change, ...stillThere } : { ...change, remove: [], removeNotes: [] },
     products: plan.products.map((p) => ({
       ...p,
       title: after.products.find((line) => line.id === p.id)?.title ?? productTitle(plan, p),

@@ -34,7 +34,7 @@ Exit codes: 0 done, 1 failed, 3 not logged in or AH refused the login (`food ah 
 - One `ahdump` at a time (a lock file next to the token): AH rotates the refresh token on every renewal, so two processes renewing at once would log the household out.
 - At least 1 s between requests, also across runs, and an honest User-Agent (`family-food-ahdump/0.1 (personal household use; …)`).
 - An anonymous token (about 7 days) is kept next to the user token and reused for anonymous searches. AH can drop it sooner: on a 401 ahdump gets a new one and tries once more.
-- It only adds to Mijn lijst: it never removes anything and never checks out. Run it from home (residential IP) and keep the volume low.
+- It adds to Mijn lijst and removes from it (`basket-remove`, refused while an order is open for changes in the AH app); it never checks out (ADR 0004). Run it from home (residential IP) and keep the volume low.
 
 ## Checking it by hand against the live API
 
@@ -50,7 +50,9 @@ The tests only cover the CLI against the fake AH. After a change here, or when A
 8. `food ah basket`. Compare with Mijn lijst in the AH app: the same products, quantities and prices, and your free-text notes.
 9. Only when **no order is placed** for the coming Saturday (`ahdump/ahdump -auth … orders` shows none for that date with a total above 0): put one product in Mijn lijst by hand, then
    `echo '{"products":[{"id":<that product id>,"quantity":1},{"id":<another id>,"quantity":1}],"notes":[{"description":"test note family-food","quantity":1}]}' | ahdump/ahdump -auth ~/Library/Application\ Support/family-food/ah-token.json basket-add`.
-   In the app, the first product's quantity went up by 1 (one line, not two), the second is added, the note shows as free text, and nothing else changed. Remove the test items by hand.
+   In the app, the first product's quantity went up by 1 (one line, not two), the second is added, the note shows as free text, and nothing else changed. Then
+   `echo '{"products":[{"id":<that product id>,"quantity":1},{"id":<another id>,"quantity":1}],"notes":[{"description":"test note family-food"}]}' | ahdump/ahdump -auth … basket-remove`.
+   The first product is back to its quantity, the second and the note are gone (checked live 2026-11-28: `basketItemsUpdate` sets a quantity, `basketItemsDelete` takes `{id}` or `{description}`).
 10. Order status, with **no order placed**: `ahdump/ahdump -auth ~/Library/Application\ Support/family-food/ah-token.json orders` prints `[]`, only orders for other dates, or the delivery subscription's orders: `isSubscriptionOrder: true` and `totalPrice.totalPrice.amount` 0, `SUBMITTED` (or `REOPENED` once picked in the app). The guard skips those.
 11. Order status, **after checking out** a real order for a Saturday (do this in a week you order anyway): the same command lists it with `delivery.slot.date` equal to that Saturday as `YYYY-MM-DD`, a `delivery.status` such as `SUBMITTED` and a `totalPrice` above 0. Then reopen it for changes in the app and run it again: it is still listed (e.g. `REOPENED`) with its total. If the date has another format, the order is missing or its total is 0, note it on #30: the guard in `placedOrder` (`cli/adapters/ah/gateway.ts`) compares `delivery.slot.date` with the Week Menu's `week_start` and skips orders with a total of 0.
     Order open for changes (checked live 2026-11-16 with an empty subscription order): pick an order in the app (order from Mijn lijst and choose its slot) without submitting. `ahdump/ahdump -auth … active-order` prints it (`state: REOPENED`, `deliveryInformation.deliveryDate`, `orderedProducts`), and `basket-add` puts products into it (its total in `orders` goes up at once) and notes in Mijn lijst. Undo the changes in the app: `active-order` prints `null`.

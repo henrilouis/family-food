@@ -64,6 +64,7 @@ export function ahdumpClient(tokenFile: string): AhClient {
       products(["search", "-token", "user", "-sort", "PURCHASE_FREQUENCY", "--", query]),
     basket: async (): Promise<AhBasket> => JSON.parse(await ahdump(["basket"])),
     addToBasket: async (additions): Promise<AhBasket> => JSON.parse(await ahdump(["basket-add"], JSON.stringify(additions))),
+    removeFromBasket: async (removals): Promise<AhBasket> => JSON.parse(await ahdump(["basket-remove"], JSON.stringify(removals))),
     openOrders: async (): Promise<AhOrder[]> => JSON.parse(await ahdump(["orders"])),
     activeOrder: async (): Promise<AhActiveOrder | null> => JSON.parse(await ahdump(["active-order"])),
     searchRecipes: async ({ text, filters, size }): Promise<AhRecipeSummary[]> => {

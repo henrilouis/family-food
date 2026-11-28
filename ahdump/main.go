@@ -1,12 +1,13 @@
 // ahdump is the family-food CLI's way into Albert Heijn's unofficial app API,
 // through appie-go. The `food` CLI runs it; each command prints JSON on stdout.
-// It only adds (to Mijn lijst, or to the order open for changes in the AH app), and never removes or checks out anything.
+// It adds to Mijn lijst (or to the order open for changes in the AH app) and removes from Mijn lijst; it never checks out.
 //
 //	ahdump -auth <token file> login
 //	ahdump -auth <token file> refresh
 //	ahdump -auth <token file> search [-token anonymous|user] [-sort RELEVANCE|PURCHASE_FREQUENCY] [--] <query>
 //	ahdump -auth <token file> basket
 //	ahdump -auth <token file> basket-add < {"products": [{"id", "quantity"}], "notes": [{"description", "quantity"}]}
+//	ahdump -auth <token file> basket-remove < {"products": [{"id", "quantity"}], "notes": [{"description"}]}
 //	ahdump -auth <token file> orders
 //	ahdump -auth <token file> active-order
 //	ahdump -auth <token file> recipes [-size n] [-filter group=value]... [--] [search text]
@@ -43,6 +44,10 @@ commands:
                           ({"products": [{"id", "quantity"}], "notes": [{"description", "quantity"}]}),
                           then print Mijn lijst; quantities add to what is there, nothing is removed.
                           While an order is open for changes, the products go into that order instead
+  basket-remove           take the products and notes given as JSON on stdin out of Mijn lijst
+                          ({"products": [{"id", "quantity"}], "notes": [{"description"}]}), then print Mijn lijst;
+                          quantities are taken off the line (at 0 it goes), items not there are skipped.
+                          Refuses while an order is open for changes in the AH app
   orders                  print the open orders (checked out, reopened, or the delivery subscription's
                           empty orders) with their delivery slot and total as JSON
   active-order            print the order open for changes in the AH app as JSON (null when none is)
@@ -100,6 +105,8 @@ func main() {
 		}
 	case "basket-add":
 		err = basketAdd(ctx, ah)
+	case "basket-remove":
+		err = basketRemove(ctx, ah)
 	case "orders":
 		var orders []byte
 		if orders, err = ah.openOrders(ctx); err == nil {

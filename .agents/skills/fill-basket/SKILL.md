@@ -7,12 +7,13 @@ description: Fill the Albert Heijn Basket (Mijn lijst) for a Locked Week Menu, f
 
 Turn a Locked Week Menu and its Staples into AH products in Mijn lijst. Vocabulary is from `GLOSSARY.md`. You hold the judgement: translating each ingredient line to Dutch, choosing its product, its kind and its pack fraction. The `food` CLI does the rest (Doubles, Staples, sums, rounding, the write to AH, the `## Basket` section, the report); run it from this repo (`node cli/food.ts …` if `food` isn't on the PATH). The vault is the `vault` path in `food config`.
 
-Your writes are Products.md (through `food products pin`) and Mijn lijst (through `food basket fill`). An adult always checks out. Whatever happens with AH, the Locked Week Menu stands.
+Your writes are Products.md (through `food products pin`) and Mijn lijst (through `food basket fill` and `food basket remove`). An adult always checks out. Whatever happens with AH, the Locked Week Menu stands.
 
 ## Callers
 
 - **The Planning Session**, at lock, names the week (`week_start`). On the Late path it also says how the household shops: another AH slot (fill Mijn lijst as usual; the checkout is into that slot) or a store trip (Mijn lijst is then the shopping list in the AH app; leave out the checkout reminder).
-- **An adult**: "fill the Basket". Also run again after a Locked Week Menu changed: the CLI adds only the difference and lists what is no longer needed.
+- **An adult**: "fill the Basket". Also run again after a Locked Week Menu changed: the CLI adds only the difference and takes out of Mijn lijst what an earlier run added that is no longer needed.
+- **An adult**: "take X out of the Basket". See [Removing items](#removing-items).
 
 ## Steps
 
@@ -94,7 +95,7 @@ Done when Products.md holds every confirmed new match and you have the `haveAtHo
 
 Write `{ "lines": [entries…], "haveAtHome": [ids…] }` to a temp JSON file. Tell the adult a browser window may open for the AH login, then run `food basket fill --week <week_start> <file>` with a long timeout (10 minutes): on an expired login the CLI opens the login itself, once. Run it once; a retry is the adult's call.
 
-- **Exit 0**: Mijn lijst is filled (or the placed order already has everything). When the week's order was open for changes in the AH app, the products went straight into that order and the notes into Mijn lijst; the report ends with when to submit it. Show the report as printed.
+- **Exit 0**: Mijn lijst is filled (or the placed order already has everything), and what an earlier run added that is no longer needed is taken out ("No longer needed, removed from Mijn lijst"). When the week's order was open for changes in the AH app, the products went straight into that order and the notes into Mijn lijst, and what is no longer needed is listed for the adult to remove there; the report ends with when to submit it. Show the report as printed.
 - **Exit 2**: nothing was written to AH. Show the adult the whole output: it starts with the reason (order already placed, an order for another week open for changes in the AH app, login failed, AH ordering down) and holds the add-multiple links, the shopping list, or what to change in Mijn bestellingen. For an order of another week open for changes, the adult submits it or undoes its changes in the app; then run step 6 again.
 - **Exit 1** with "The matches don't fit the Week Menu": your list is off (a missing line, a line not on this week's Recipes, a product without pack fraction). Nothing was written; fix the entries and run it again.
 - **Exit 1** otherwise: pass the message on.
@@ -106,6 +107,12 @@ Done when the adult has seen the report or the CLI's whole output.
 ### 7. Report
 
 After the CLI's output, add in a few lines: how many matches you pinned, any pack fraction or product you weren't sure of, and on the Late path how this week's food arrives instead of the Saturday slot.
+
+## Removing items
+
+When an adult changed their mind on a Recipe, change the Locked Week Menu first and fill the Basket again (step 6 onwards, with the new entries): the CLI removes what that Recipe alone needed and keeps what other Recipes share.
+
+For anything else the adult wants out of Mijn lijst (something added by hand, or fewer packs than the CLI chose), run `food ah basket` to find the webshop ids and exact note texts, then `food basket remove --product <id>[:<packs>]... --note <text>...` (no packs: the whole line). It prints what it removed and what wasn't there. Exit 1 while an order is open for changes in the AH app: tell the adult to change that order in the app. A product removed this way that is in the week's `## Basket` section stays recorded there; a later fill doesn't add it back unless the Week Menu needs more of it.
 
 ## Matching order
 

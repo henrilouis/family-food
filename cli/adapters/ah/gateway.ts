@@ -13,7 +13,7 @@ import {
   type AllerhandeCandidate,
   type ProductSuggestion,
 } from "./allerhande.ts";
-import { AhError, AhLoginError, type AhBasket, type AhBasketAdditions, type AhClient, type AhOrder } from "./client.ts";
+import { AhError, AhLoginError, type AhBasket, type AhBasketAdditions, type AhBasketRemovals, type AhClient, type AhOrder } from "./client.ts";
 import { fakeAhClient } from "./fake.ts";
 import { previouslyBought, rankProducts, type Product } from "./products.ts";
 import type { Measure } from "../../amount.ts";
@@ -33,7 +33,7 @@ export type Basket = {
 export type OrderInFocus = { id: number; date: string; closes: Date | null; products: Basket["products"] };
 
 /**
- * Everything the `food` CLI does with Albert Heijn. It never removes items and never checks out.
+ * Everything the `food` CLI does with Albert Heijn. It never checks out.
  */
 export interface AhGateway {
   /** Logs in once in a real browser and keeps the user token next to the local config, readable only by this user. */
@@ -55,6 +55,12 @@ export interface AhGateway {
    * Returns Mijn lijst after. Needs the login.
    */
   addToBasket(additions: AhBasketAdditions): Promise<Basket>;
+  /**
+   * Takes products (`quantity` packs off each line; at 0 the line goes) and notes out of Mijn lijst, skipping those
+   * not there. Returns Mijn lijst after. Fails with AhError while an order is open for changes (`orderInFocus`):
+   * whether AH's removals reach that order is unchecked, so it is changed in the app. Needs the login.
+   */
+  removeFromBasket(removals: AhBasketRemovals): Promise<Basket>;
   /**
    * A placed order (checked out, or reopened for changes) delivering in the Week Menu's week: from its Saturday
    * `weekStart` (YYYY-MM-DD) to the Friday after, so also another slot booked on the Late path. `date` is its delivery day.
@@ -109,6 +115,11 @@ export function ahGateway(config: Config): AhGateway {
     async addToBasket(additions) {
       if (!(await loggedIn())) throw new AhLoginError();
       return basket(await client.addToBasket(additions));
+    },
+    async removeFromBasket(removals) {
+      if (!(await loggedIn())) throw new AhLoginError();
+      if (await client.activeOrder()) throw new AhError("An order is open for changes in the AH app: remove items from it in the app.");
+      return basket(await client.removeFromBasket(removals));
     },
     async placedOrder(weekStart) {
       if (!(await loggedIn())) throw new AhLoginError();

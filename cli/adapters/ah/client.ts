@@ -114,6 +114,12 @@ export type AhBasketAdditions = {
   notes: { description: string; quantity: number }[];
 };
 
+/** What to take out of Mijn lijst: how many packs off each product line (at 0 the line goes), and notes. */
+export type AhBasketRemovals = {
+  products: { id: number; quantity: number }[];
+  notes: { description: string }[];
+};
+
 /**
  * AH's unofficial app API, as raw as AH returns it: the part of the AH gateway that is swapped for a fake.
  * The real one runs the Go `ahdump` tool; the fake keeps its state in JSON files.
@@ -132,6 +138,11 @@ export interface AhClient {
   basket(): Promise<AhBasket>;
   /** Adds products (GraphQL `basketItemsAdd`, which adds to the quantity already there) and free-text notes; returns Mijn lijst. */
   addToBasket(additions: AhBasketAdditions): Promise<AhBasket>;
+  /**
+   * Takes products (GraphQL `basketItemsUpdate`, or `basketItemsDelete` at 0) and notes (`basketItemsDelete` by
+   * description) out of Mijn lijst, skipping those not there; returns Mijn lijst. Refuses while an order is open for changes.
+   */
+  removeFromBasket(removals: AhBasketRemovals): Promise<AhBasket>;
   /** The open orders (GraphQL `orderFulfillments(status: OPEN)`), with the user token. */
   openOrders(): Promise<AhOrder[]>;
   /** The order open for changes in the AH app, with the user token; null when none is. */

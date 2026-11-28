@@ -8,6 +8,7 @@ import {
   type AhActiveOrder,
   type AhBasket,
   type AhBasketAdditions,
+  type AhBasketRemovals,
   type AhClient,
   type AhOrder,
   type AhProduct,
@@ -31,8 +32,8 @@ type Mode =
  * - `previously-bought.json`: webshop ids the household bought before, most frequently bought first
  * - `basket.json`: Mijn lijst, `{ products: [{ id, quantity }], notes: [{ description, quantity }] }`;
  *   titles and prices come from the catalogue
- * - `basket-requests.json`: every write it received, in order (`{ add: { products, notes } }`), so tests can
- *   check that nothing was ever removed
+ * - `basket-requests.json`: every write it received, in order (`{ add: { products, notes } }` or
+ *   `{ remove: { products, notes } }`), so tests can check what was written
  * - `mode.json`: how AH behaves; missing means all is well.
  *   `{ "mode": "order placed", "date": "2026-11-28", "status": "SUBMITTED" }`: the order for delivery on `date`
  *   is checked out (`status` defaults to SUBMITTED; REOPENED means reopened for changes)
@@ -92,6 +93,11 @@ export function fakeAhClient(folder: string, tokenFile: string): AhClient {
     const catalogue = await state<AhProduct[]>("products.json", []);
     const lines = (await readOrder()).products;
     return lines.reduce((sum, { id, quantity }) => sum + (price(catalogue.find((p) => p.webshopId === id)) ?? 0) * quantity, 0);
+  };
+
+  const logRequest = async (request: unknown) => {
+    const requests = await state<unknown[]>("basket-requests.json", []);
+    await writeFile(path.join(folder, "basket-requests.json"), JSON.stringify([...requests, request], null, 2));
   };
 
   const asAh = async (basket: FakeBasket): Promise<AhBasket> => {
@@ -157,8 +163,7 @@ export function fakeAhClient(folder: string, tokenFile: string): AhClient {
       const catalogue = await state<AhProduct[]>("products.json", []);
       const unknown = additions.products.filter(({ id }) => !catalogue.some((p) => p.webshopId === id));
       if (unknown.length) throw new AhError(`AH doesn't know product ${unknown.map((p) => p.id).join(", ")}`);
-      const requests = await state<unknown[]>("basket-requests.json", []);
-      await writeFile(path.join(folder, "basket-requests.json"), JSON.stringify([...requests, { add: additions }], null, 2));
+      await logRequest({ add: additions });
       const basket = await readBasket();
       const inFocus = (await fakeOrder())?.inFocus;
       const order = await readOrder();
@@ -171,6 +176,20 @@ export function fakeAhClient(folder: string, tokenFile: string): AhClient {
       basket.notes.push(...additions.notes);
       await writeFile(path.join(folder, "basket.json"), JSON.stringify(basket, null, 2));
       if (inFocus) await writeFile(path.join(folder, "order.json"), JSON.stringify(order, null, 2));
+      return asAh(basket);
+    },
+    async removeFromBasket(removals: AhBasketRemovals) {
+      await asUser();
+      if ((await fakeOrder())?.inFocus) throw new AhError("basket-remove: an order is open for changes in the AH app; change it there");
+      await logRequest({ remove: removals });
+      const basket = await readBasket();
+      for (const { id, quantity } of removals.products) {
+        const line = basket.products.find((p) => p.id === id);
+        if (line) line.quantity -= quantity;
+      }
+      basket.products = basket.products.filter((p) => p.quantity > 0);
+      basket.notes = basket.notes.filter((n) => !removals.notes.some((r) => r.description === n.description));
+      await writeFile(path.join(folder, "basket.json"), JSON.stringify(basket, null, 2));
       return asAh(basket);
     },
     async openOrders(): Promise<AhOrder[]> {

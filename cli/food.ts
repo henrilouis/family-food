@@ -58,13 +58,19 @@ Commands:
                         Fill Mijn lijst for a Locked Week Menu from the fill-basket skill's Matches
                         ({"lines": [{recipe, line, product, packFraction, kind}], "haveAtHome": [ids]}):
                         Doubles ×2 (×1 when written for both days), Staples added, summed and rounded to whole packs, unmatched lines as
-                        notes; an optional line only when it has an entry. Never removes anything. Writes the
-                        Week Menu's ## Basket section and a report.
-                        Run again, adds only the difference with ## Basket and lists what is no longer needed.
+                        notes; an optional line only when it has an entry. Writes the Week Menu's ## Basket
+                        section and a report.
+                        Run again, adds only the difference with ## Basket and takes out of Mijn lijst what an
+                        earlier run added that is no longer needed (while an order is open for changes in the AH
+                        app, only lists it).
                         On an expired AH login, opens the AH login once. Exit 2 when nothing was written to AH:
                         order already placed (add-multiple links and a shopping list, or an add-and-remove
                         list for Mijn bestellingen after a menu change), login failed (links and the list),
                         AH down (the list, also in ## Basket)
+  basket remove [--product <id>[:<packs>]]... [--note <text>]...
+                        Take products (all of the line, or that many packs) and free-text notes out of Mijn lijst,
+                        whatever added them; prints what was removed and what wasn't there. Refuses while an
+                        order is open for changes in the AH app
   notes wishes [--json] List the Wishes in the shared Apple Note "Food wishes", one per line
   notes wishes delete <wish>... [--json]
                         Delete Wishes once a Week Menu honours them
@@ -356,6 +362,7 @@ async function basket(args: string[]): Promise<void> {
     printJson(await listBasketLines(await vaultPath(), values.week));
     return;
   }
+  if (command === "remove") return removeFromBasket(rest);
   if (command !== "fill") throw new UsageError(usage);
   const { values, positionals } = parseArgs({ args: rest, allowPositionals: true, options: { week: { type: "string" } } });
   if (positionals.length !== 1 || !values.week) throw new UsageError(usage);
@@ -364,6 +371,44 @@ async function basket(args: string[]): Promise<void> {
   await writeBasketSection(outcome);
   print(formatReport(outcome));
   process.exitCode = exitCode(outcome);
+}
+
+async function removeFromBasket(args: string[]): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args,
+    allowPositionals: true,
+    options: { product: { type: "string", multiple: true }, note: { type: "string", multiple: true } },
+  });
+  const picked = (values.product ?? []).map((value) => {
+    const match = value.match(/^(\d+)(?::(\d+))?$/);
+    if (!match || match[2] === "0") throw new UsageError(`--product takes a webshop id, optionally with packs (12345 or 12345:2), not "${value}"`);
+    return { id: Number(match[1]), packs: match[2] === undefined ? null : Number(match[2]) };
+  });
+  const notes = values.note ?? [];
+  if (positionals.length || (!picked.length && !notes.length)) throw new UsageError(usage);
+
+  const gateway = ahGateway(await readConfig());
+  const before = await gateway.readBasket();
+  const products = picked.flatMap(({ id, packs }) => {
+    const line = before.products.find((p) => p.id === id);
+    return line ? [{ id, title: line.title, quantity: Math.min(packs ?? line.quantity, line.quantity) }] : [];
+  });
+  const removedNotes = notes.filter((note) => before.notes.some((n) => n.description === note));
+  if (products.length || removedNotes.length) {
+    await gateway.removeFromBasket({
+      products: products.map(({ id, quantity }) => ({ id, quantity })),
+      notes: removedNotes.map((description) => ({ description })),
+    });
+  }
+  const removed = [...products.map((p) => `- ${p.quantity} × ${p.title}`), ...removedNotes.map((note) => `- Note: ${note}`)];
+  const missing = [
+    ...picked.filter(({ id }) => !products.some((p) => p.id === id)).map(({ id }) => `- id ${id}`),
+    ...notes.filter((note) => !removedNotes.includes(note)).map((note) => `- Note: ${note}`),
+  ];
+  printLines([
+    ...(removed.length ? ["Removed from Mijn lijst:", ...removed] : ["Removed from Mijn lijst: none"]),
+    ...(missing.length ? ["Not in Mijn lijst:", ...missing] : []),
+  ]);
 }
 
 main(process.argv.slice(2)).catch((error) => {
